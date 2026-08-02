@@ -82,3 +82,59 @@ func cutDesignOrLocal(id string) (prefix, rest string, found bool) {
 	}
 	return "", id, false
 }
+
+// --- local documents --------------------------------------------------------
+//
+// A _local document is a database's own state: no revision history, and -
+// crucially - replication never copies it. Whatever a client keeps there
+// survives a move only if something carries it across deliberately.
+
+// LocalDocIDs lists the _local documents in a database.
+func (c *Client) LocalDocIDs(ctx context.Context, db string) ([]string, error) {
+	var out struct {
+		Rows []struct {
+			ID string `json:"id"`
+		} `json:"rows"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/"+escapeDB(db)+"/_local_docs", nil, &out); err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(out.Rows))
+	for _, row := range out.Rows {
+		ids = append(ids, row.ID)
+	}
+	return ids, nil
+}
+
+// LocalDoc fetches one _local document.
+func (c *Client) LocalDoc(ctx context.Context, db, id string) (map[string]any, error) {
+	var doc map[string]any
+	err := c.do(ctx, http.MethodGet, "/"+escapeDB(db)+"/"+url.PathEscape(id), nil, &doc)
+	return doc, err
+}
+
+// PutLocalDoc writes one _local document, replacing what is there.
+//
+// The revision is read from the target rather than taken from the document:
+// a _local revision is per-database bookkeeping, so one copied from elsewhere
+// is meaningless here and CouchDB rejects it as a conflict.
+func (c *Client) PutLocalDoc(ctx context.Context, db, id string, doc map[string]any) error {
+	path := "/" + escapeDB(db) + "/" + url.PathEscape(id)
+
+	var existing struct {
+		Rev string `json:"_rev"`
+	}
+	switch err := c.do(ctx, http.MethodGet, path, nil, &existing); {
+	case err == nil:
+		doc["_rev"] = existing.Rev
+	case IsNotFound(err):
+		delete(doc, "_rev")
+	default:
+		return err
+	}
+
+	if err := c.do(ctx, http.MethodPut, path, doc, nil); err != nil {
+		return fmt.Errorf("couch: put %s: %w", id, err)
+	}
+	return nil
+}

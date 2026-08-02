@@ -281,7 +281,30 @@ func (s *Server) handleReissueSetupURI(w http.ResponseWriter, r *http.Request) {
 //
 // Writing the stored password back is the whole repair, and it is safe to run
 // on a healthy vault: the same credentials are simply set again.
+type repairVaultRequest struct {
+	// MetadataFromProfileID copies livesync's _local documents from the database
+	// of the same name on another server.
+	//
+	// It is the other half of a move made before CouchHub carried them: the
+	// notes arrive, the milestone does not, and every client then reports that
+	// it cannot retrieve the remote milestone.
+	MetadataFromProfileID string `json:"metadataFromProfileId"`
+}
+
+type repairVaultResponse struct {
+	Vault vaultView `json:"vault"`
+	// MetadataCopied lists the _local documents brought over, if any were asked
+	// for.
+	MetadataCopied []string `json:"metadataCopied,omitempty"`
+}
+
 func (s *Server) handleRepairVaultAccount(w http.ResponseWriter, r *http.Request) {
+	var req repairVaultRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", err)
+		return
+	}
+
 	v, err := s.store.Vault(chi.URLParam(r, "id"))
 	if err != nil {
 		fail(w, err)
@@ -322,12 +345,38 @@ func (s *Server) handleRepairVaultAccount(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	out := repairVaultResponse{}
+	if id := strings.TrimSpace(req.MetadataFromProfileID); id != "" {
+		if id == v.ProfileID {
+			writeError(w, http.StatusBadRequest, "bad_request",
+				errors.New("메타데이터를 가져올 CouchDB는 이 Vault가 있는 서버와 달라야 합니다"))
+			return
+		}
+		other, err := s.store.Profile(id)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "no_profile", err)
+			return
+		}
+		otherClient, err := s.clientFor(other)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		copied, err := copyLivesyncMetadata(ctx, otherClient, client, v.DBName)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "metadata_copy_failed", err)
+			return
+		}
+		out.MetadataCopied = copied
+	}
+
 	v.UpdatedAt = time.Now().UTC()
 	if err := s.store.PutVault(v); err != nil {
 		fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, toVaultView(v))
+	out.Vault = toVaultView(v)
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handleDeleteVault(w http.ResponseWriter, r *http.Request) {

@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 
 import { ClientSetupPanel } from "@/components/ClientSetupPanel"
+import { ProfileSelect } from "@/components/ProfileSelect"
 import { MigrateVaultCard } from "@/components/MigrateVaultCard"
 import { PageHeader } from "@/components/PageHeader"
 import { VaultDocuments } from "@/components/VaultDocuments"
@@ -37,6 +38,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ActivityHeatmap } from "@/components/viz/ActivityHeatmap"
 import { TrendChart } from "@/components/viz/TrendChart"
 import { ApiError, statusQuery } from "@/lib/api"
+import { profilesQuery } from "@/lib/profiles"
 import { formatBytes, formatCount, formatDate, statsApi } from "@/lib/stats"
 import { vaultsApi } from "@/lib/vaults"
 
@@ -51,6 +53,7 @@ export default function VaultDetail() {
   // The tab lives in the URL so a reload, a back button or a shared link all
   // land where they were rather than resetting to the first panel.
   const { data: status } = useQuery(statusQuery)
+  const { data: profiles } = useQuery(profilesQuery)
   const documentsEnabled = status?.documentsEnabled ?? true
 
   const [searchParams, setSearchParams] = useSearchParams()
@@ -78,8 +81,10 @@ export default function VaultDetail() {
   })
   const snapshots = stats?.snapshots ?? []
 
+  const [metadataFrom, setMetadataFrom] = useState("")
+
   const repair = useMutation({
-    mutationFn: () => vaultsApi.repair(id),
+    mutationFn: () => vaultsApi.repair(id, metadataFrom),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["vaults", id] }),
   })
 
@@ -226,6 +231,25 @@ export default function VaultDetail() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
+              {(profiles?.length ?? 0) > 1 ? (
+                <Field>
+                  <FieldLabel htmlFor="repair-metadata">livesync 메타데이터 가져오기 (선택)</FieldLabel>
+                  <ProfileSelect
+                    id="repair-metadata"
+                    value={metadataFrom}
+                    onChange={setMetadataFrom}
+                    profiles={profiles}
+                    exclude={[vault.profileId]}
+                    placeholder="가져오지 않음"
+                  />
+                  <FieldDescription>
+                    Obsidian이 &quot;Could not retrieve remote milestone&quot;을 띄우면, 예전에 이 Vault가 있던 서버를
+                    고르세요. 복제는 <span className="font-mono">_local</span> 문서를 옮기지 않아 milestone과 암호화
+                    파라미터가 남아 있습니다.
+                  </FieldDescription>
+                </Field>
+              ) : null}
+
               <Button variant="outline" onClick={() => repair.mutate()} disabled={repair.isPending}>
                 {repair.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Wrench aria-hidden />}
                 계정 복구
@@ -237,6 +261,13 @@ export default function VaultDetail() {
                   <AlertTitle>적용했습니다</AlertTitle>
                   <AlertDescription>
                     계정 비밀번호와 데이터베이스 권한을 저장된 값으로 다시 맞췄습니다.
+                    {repair.data?.metadataCopied?.length ? (
+                      <ul className="mt-1 list-disc space-y-0.5 pl-4 font-mono text-xs">
+                        {repair.data.metadataCopied.map((d) => (
+                          <li key={d}>{d}</li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </AlertDescription>
                 </Alert>
               ) : null}

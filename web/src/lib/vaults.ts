@@ -129,6 +129,12 @@ export interface Migration {
   setupUriChanged: boolean
 }
 
+export interface RepairResult {
+  vault: Vault
+  /** _local documents brought over from another server, if any were asked for. */
+  metadataCopied?: string[]
+}
+
 export interface StartMigrationValues {
   targetProfileId: string
   deleteSource: boolean
@@ -151,8 +157,12 @@ export const vaultsApi = {
   create: (values: CreateVaultValues) => api.post<VaultWithCredentials>("/vaults", values),
   /** Mints a fresh PIN, which invalidates whatever was issued before it. */
   reissue: (id: string) => api.post<VaultWithCredentials>(`/vaults/${id}/setup-uri`),
-  /** Writes the stored CouchDB account back to the server. */
-  repair: (id: string) => api.post<Vault>(`/vaults/${id}/repair`),
+  /**
+   * Writes the stored CouchDB account back to the server, and optionally
+   * carries livesync's _local documents over from another one.
+   */
+  repair: (id: string, metadataFromProfileId = "") =>
+    api.post<RepairResult>(`/vaults/${id}/repair`, { metadataFromProfileId }),
   remove: (id: string, confirm: string, keepData = false) =>
     api.delete<void>(
       `/vaults/${id}?confirm=${encodeURIComponent(confirm)}${keepData ? "&keepData=true" : ""}`,

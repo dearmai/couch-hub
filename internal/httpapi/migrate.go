@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/dearmai/couch-hub/internal/couch"
+	"github.com/dearmai/couch-hub/internal/livesync"
 	"github.com/dearmai/couch-hub/internal/store"
 	"github.com/dearmai/couch-hub/internal/vault"
 )
@@ -262,6 +263,9 @@ type finishMigrationResponse struct {
 	SetupURIChanged bool `json:"setupUriChanged"`
 	// SourceRemoved reports what happened to the original database.
 	SourceRemoved bool `json:"sourceRemoved"`
+	// MetadataCopied lists the _local documents carried over by hand, since
+	// replication does not move them.
+	MetadataCopied []string `json:"metadataCopied,omitempty"`
 	// SourceError explains a copy that finished but whose cleanup did not. The
 	// vault has already moved at that point, so this is a leftover to tidy, not
 	// a failed migration.
@@ -313,6 +317,20 @@ func (s *Server) handleFinishMigration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Before the switch, not after: a vault pointed at a database without its
+	// milestone is one every client refuses to sync, and the source is still
+	// right here to read it from.
+	sourceClient, err := s.clientFor(source)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	copied, err := copyLivesyncMetadata(ctx, sourceClient, targetClient, m.DBName)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "metadata_copy_failed", err)
+		return
+	}
+
 	v.ProfileID = target.ID
 	v.UpdatedAt = time.Now().UTC()
 	if err := s.store.PutVault(v); err != nil {
@@ -326,6 +344,7 @@ func (s *Server) handleFinishMigration(w http.ResponseWriter, r *http.Request) {
 	out := finishMigrationResponse{
 		Vault:           toVaultView(v),
 		SetupURIChanged: source.PublicBaseURL != target.PublicBaseURL,
+		MetadataCopied:  copied,
 	}
 
 	var problems []string
@@ -334,10 +353,7 @@ func (s *Server) handleFinishMigration(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if m.DeleteSource {
-		sourceClient, err := s.clientFor(source)
 		switch {
-		case err != nil:
-			problems = append(problems, err.Error())
 		case v.Adopted:
 			// The database predates CouchHub, so "delete the source" removes the
 			// account CouchHub added and nothing else.
@@ -412,6 +428,40 @@ func (s *Server) handleCancelMigration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// copyLivesyncMetadata carries the _local documents replication leaves behind.
+//
+// CouchDB's replicator copies documents, not a database's local state, and
+// livesync keeps its milestone and its encryption parameters exactly there. A
+// vault moved without them connects and then reports that it cannot retrieve
+// the remote milestone or the preferred tweak values - the notes are all
+// present, and the client refuses to sync them.
+//
+// Replication checkpoints are deliberately left behind; see
+// livesync.IsMetadataLocalDoc.
+func copyLivesyncMetadata(ctx context.Context, src, dst *couch.Client, dbName string) ([]string, error) {
+	ids, err := src.LocalDocIDs(ctx, dbName)
+	if err != nil {
+		return nil, fmt.Errorf("원본의 _local 문서를 읽지 못했습니다: %w", err)
+	}
+
+	var copied []string
+	for _, id := range ids {
+		if !livesync.IsMetadataLocalDoc(id) {
+			continue
+		}
+		doc, err := src.LocalDoc(ctx, dbName, id)
+		if err != nil {
+			return copied, fmt.Errorf("%s 읽기 실패: %w", id, err)
+		}
+		delete(doc, "_rev")
+		if err := dst.PutLocalDoc(ctx, dbName, id, doc); err != nil {
+			return copied, fmt.Errorf("%s 쓰기 실패: %w", id, err)
+		}
+		copied = append(copied, id)
+	}
+	return copied, nil
 }
 
 // selfURL is the address a server can be expected to reach itself at.
