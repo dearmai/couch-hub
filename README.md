@@ -159,19 +159,23 @@ Ports on the deployed host:
 
 | Service | Host | Container |
 |---|---|---|
-| CouchDB | `${COUCHDB_PORT:-10021}` | 5984 |
-| CouchHub | not published | 10020 |
+| CouchDB | `0.0.0.0:${COUCHDB_PORT:-10021}` | 5984 |
+| CouchHub | `127.0.0.1:${COUCHHUB_PORT:-10020}` | 10020 |
 | Caddy | 80, 443 | 80, 443 |
 
-CouchDB is published so something outside the compose network can reach it
+Both are published so something outside the compose network can reach them
 without going through Caddy — a Cloudflare tunnel running on the host, for
-instance. It is protected by its own admin account: the image disables admin
-party once `COUCHDB_PASSWORD` is set, and CouchHub's provisioning then requires
-a valid user for everything but `/_up`. `COUCHDB_BIND=127.0.0.1` narrows it to
-the host when the LAN has no business reaching it.
+instance.
 
-The panel stays inside the network. Uncomment the `ports` block on the
-`couchhub` service to publish it the same way.
+They default to different addresses on purpose. CouchDB carries its own admin
+account: the image disables admin party once `COUCHDB_PASSWORD` is set, and
+CouchHub's provisioning then requires a valid user for everything but `/_up`, so
+a LAN-reachable port is a port that asks for credentials. **The panel has no
+login.** Anything that reaches it can read every vault's credentials and reissue
+its Setup URIs, so it stays on loopback and the access control belongs in
+whatever terminates its public hostname — Cloudflare Access, or an
+authenticating proxy. `COUCHHUB_BIND=0.0.0.0` opens it to the LAN, and is only
+sensible where the LAN itself is the trust boundary.
 
 Note that 10021 is also the Vite dev server's port, so a host running
 `make dev-server` and the deployed stack at once needs one of them moved.

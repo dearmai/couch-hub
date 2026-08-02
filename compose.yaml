@@ -57,11 +57,16 @@ services:
       COUCHHUB_DOCUMENTS: ${COUCHHUB_DOCUMENTS:-true}
     volumes:
       - couchhub-data:/data
-    expose:
-      - "10020"
-    # Uncomment to reach the panel directly, bypassing the proxy.
-    # ports:
-    #   - "10020:10020"
+    # Published for the same reason as CouchDB: a tunnel or proxy outside the
+    # compose network needs a way in.
+    #
+    # Unlike CouchDB, the panel has no authentication of its own. Anything that
+    # can reach this port can read every vault's credentials and reissue its
+    # Setup URIs. Keep it to the host with COUCHHUB_BIND=127.0.0.1 and put the
+    # access control in front of it - Cloudflare Access, or whatever terminates
+    # the public hostname - rather than leaving it open on the LAN.
+    ports:
+      - "${COUCHHUB_BIND:-127.0.0.1}:${COUCHHUB_PORT:-10020}:10020"
 
   caddy:
     image: docker.io/library/caddy:2-alpine
