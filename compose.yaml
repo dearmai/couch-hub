@@ -70,6 +70,13 @@ services:
 
   caddy:
     image: docker.io/library/caddy:2-alpine
+    # Opt-in, because it is one of two ways to publish this stack and not the
+    # only one. A Cloudflare tunnel reaching the published ports needs no proxy
+    # here at all, and starting Caddy anyway would fail on a host that already
+    # has something on 80/443.
+    #
+    # Start it with:  podman compose --profile proxy up -d
+    profiles: ["proxy"]
     restart: unless-stopped
     depends_on:
       - couchdb

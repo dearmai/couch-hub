@@ -161,7 +161,7 @@ Ports on the deployed host:
 |---|---|---|
 | CouchDB | `0.0.0.0:${COUCHDB_PORT:-10021}` | 5984 |
 | CouchHub | `127.0.0.1:${COUCHHUB_PORT:-10020}` | 10020 |
-| Caddy | 80, 443 | 80, 443 |
+| Caddy | 80, 443 — opt-in, `--profile proxy` | 80, 443 |
 
 Both are published so something outside the compose network can reach them
 without going through Caddy — a Cloudflare tunnel running on the host, for
@@ -176,6 +176,31 @@ its Setup URIs, so it stays on loopback and the access control belongs in
 whatever terminates its public hostname — Cloudflare Access, or an
 authenticating proxy. `COUCHHUB_BIND=0.0.0.0` opens it to the LAN, and is only
 sensible where the LAN itself is the trust boundary.
+
+Caddy is one way to publish this stack and no longer the default one, so it sits
+behind a compose profile: `podman compose --profile proxy up -d` starts it,
+`make remote-deploy` does not. Starting it unasked would fail on a host that
+already has something on 80/443.
+
+### Publishing through a Cloudflare tunnel
+
+`cloudflared` on the host reaches both published ports, and terminates the
+hostnames itself — nothing here needs 80 or 443.
+
+| Hostname | Service |
+|---|---|
+| `SYNC_DOMAIN` | `http://localhost:10021` |
+| `HUB_DOMAIN` | `http://localhost:10020` |
+
+CouchDB has to be at the root of its own hostname; livesync does not support a
+subpath. Put an access policy on the panel's hostname — the tunnel is the
+internet, and the panel has no login.
+
+Cloudflare's own limits apply to sync traffic: request bodies are capped at
+100 MB on the free plan, and a proxied request that goes 100 s without bytes
+answers 524. Do not add CORS headers at the edge — CouchHub configures them on
+CouchDB, and a duplicated `Access-Control-Allow-Origin` fails the browser check
+outright.
 
 Note that 10021 is also the Vite dev server's port, so a host running
 `make dev-server` and the deployed stack at once needs one of them moved.
