@@ -167,6 +167,25 @@ type statusResponse struct {
 	// DocumentsEnabled mirrors COUCHHUB_DOCUMENTS so the UI hides the tab
 	// instead of offering one that answers 403.
 	DocumentsEnabled bool `json:"documentsEnabled"`
+
+	// SetupDefaults prefills the install wizard from the environment the
+	// container was started with, so a compose deployment does not ask the
+	// operator to retype what its .env already says. Absent once a server is
+	// configured.
+	SetupDefaults *setupDefaults `json:"setupDefaults,omitempty"`
+}
+
+// setupDefaults is the non-secret half of the bootstrap configuration.
+//
+// The admin password is deliberately not here. The panel has no login, so
+// anything this endpoint returns is readable by whoever reaches it, and handing
+// out the CouchDB administrator password is not a thing to do for the
+// convenience of a prefilled form.
+type setupDefaults struct {
+	Name          string `json:"name"`
+	AdminBaseURL  string `json:"adminBaseUrl"`
+	PublicBaseURL string `json:"publicBaseUrl"`
+	AdminUser     string `json:"adminUser"`
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
@@ -189,11 +208,22 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, statusResponse{
+	out := statusResponse{
 		NeedsSetup:       !provisioned,
 		ProfileCount:     len(profiles),
 		VaultCount:       len(vaults),
 		SecretEnabled:    s.sealer.Enabled(),
 		DocumentsEnabled: s.cfg.DocumentsEnabled,
-	})
+	}
+
+	if b := s.cfg.Bootstrap; len(profiles) == 0 && (b.AdminBaseURL != "" || b.PublicBaseURL != "") {
+		out.SetupDefaults = &setupDefaults{
+			Name:          b.Name,
+			AdminBaseURL:  b.AdminBaseURL,
+			PublicBaseURL: b.PublicBaseURL,
+			AdminUser:     b.AdminUser,
+		}
+	}
+
+	writeJSON(w, http.StatusOK, out)
 }

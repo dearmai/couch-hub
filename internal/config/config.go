@@ -42,6 +42,36 @@ type Config struct {
 	// of the feature, but it is more than some deployments want a web UI to do -
 	// hence a switch. Enabled by default.
 	DocumentsEnabled bool
+
+	// Bootstrap is the CouchDB a container deployment was started with.
+	Bootstrap Bootstrap
+}
+
+// Bootstrap is the first CouchDB, taken from the environment.
+//
+// A compose deployment already knows its server: the same .env creates the
+// CouchDB admin account and names the address clients reach it at. Asking for
+// all of it again in the install wizard is asking the operator to retype what
+// they have already configured, so CouchHub registers it itself on first start
+// and the wizard is left for everything the environment does not know.
+type Bootstrap struct {
+	// Name labels the stored server.
+	Name string
+	// AdminBaseURL is how CouchHub reaches CouchDB, e.g. http://couchdb:5984.
+	AdminBaseURL string
+	// PublicBaseURL is what goes into Setup URIs.
+	PublicBaseURL string
+	AdminUser     string
+	AdminPassword string
+}
+
+// Complete reports whether there is enough to register a server without asking.
+//
+// The public address is part of that: registering a server without one produces
+// Setup URIs pointing at an address only CouchHub can reach, which fails on
+// every phone rather than failing here.
+func (b Bootstrap) Complete() bool {
+	return b.AdminBaseURL != "" && b.PublicBaseURL != "" && b.AdminUser != "" && b.AdminPassword != ""
 }
 
 func (c Config) DBPath() string { return filepath.Join(c.DataDir, "couchhub.db") }
@@ -61,6 +91,13 @@ func Load(args []string) (Config, error) {
 		// Default on: hiding it by default would make the feature invisible to
 		// anyone who did not read the configuration reference.
 		DocumentsEnabled: envBool("COUCHHUB_DOCUMENTS", true),
+		Bootstrap: Bootstrap{
+			Name:          envString("COUCHHUB_COUCHDB_NAME", "CouchDB"),
+			AdminBaseURL:  os.Getenv("COUCHHUB_COUCHDB_URL"),
+			PublicBaseURL: os.Getenv("COUCHHUB_COUCHDB_PUBLIC_URL"),
+			AdminUser:     os.Getenv("COUCHHUB_COUCHDB_USER"),
+			AdminPassword: os.Getenv("COUCHHUB_COUCHDB_PASSWORD"),
+		},
 	}
 
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)

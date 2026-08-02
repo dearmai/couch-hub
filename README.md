@@ -19,7 +19,13 @@ cp .env.example .env
 podman compose up -d          # or: docker compose up -d
 ```
 
-Open `https://<HUB_DOMAIN>` and follow the install wizard.
+Open `https://<HUB_DOMAIN>`. The CouchDB this file creates is registered and
+provisioned on first start — same `.env`, so there is nothing to retype — and
+the panel opens on the dashboard rather than the install wizard.
+
+The wizard is still there for a CouchDB compose did not create, and for the case
+where the bootstrap could not run: it is prefilled from the same environment,
+minus the administrator password, which the API does not hand out.
 
 `COUCHHUB_SECRET` seals credentials at rest. Without it CouchHub still runs, but
 vault credentials are shown once and never stored — Setup URIs cannot be

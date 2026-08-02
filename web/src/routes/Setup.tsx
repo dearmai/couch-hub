@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router"
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, Circle, Database, Loader2 } from "lucide-react"
 
@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { ApiError } from "@/lib/api"
+import { ApiError, statusQuery } from "@/lib/api"
 import { connectSchema, setupApi, type ApplyResponse, type ConnectValues, type Diagnosis } from "@/lib/setup"
 import { GuideStep } from "@/routes/setup/GuideStep"
 import { DiffTable } from "@/routes/setup/DiffTable"
@@ -32,13 +32,19 @@ export default function Setup() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
+  // The container usually knows its own CouchDB: compose passes the same values
+  // that created it. Only the password is left to type - the API does not hand
+  // that out, and the panel it would be handed out through has no login.
+  const { data: status } = useQuery(statusQuery)
+  const defaults = status?.setupDefaults
+
   const form = useForm<ConnectValues>({
     resolver: zodResolver(connectSchema),
     defaultValues: {
-      name: "homelab",
-      adminBaseUrl: "http://couchdb:5984",
-      publicBaseUrl: "",
-      adminUser: "admin",
+      name: defaults?.name || "homelab",
+      adminBaseUrl: defaults?.adminBaseUrl || "http://couchdb:5984",
+      publicBaseUrl: defaults?.publicBaseUrl || "",
+      adminUser: defaults?.adminUser || "admin",
       adminPassword: "",
     },
   })

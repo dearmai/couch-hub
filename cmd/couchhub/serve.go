@@ -45,10 +45,16 @@ func runServe(args []string) error {
 	poller := metrics.NewPoller(st, sealer, cfg.PollInterval)
 	go poller.Run(ctx)
 
-	handler, err := httpapi.NewServer(cfg, st, sealer, poller).Handler()
+	api := httpapi.NewServer(cfg, st, sealer, poller)
+	handler, err := api.Handler()
 	if err != nil {
 		return err
 	}
+
+	// Registers the CouchDB the container was given, if there is one and nothing
+	// is configured yet. In its own goroutine because it waits for CouchDB to
+	// come up, and the panel has to answer while it does.
+	go api.Bootstrap(ctx)
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,

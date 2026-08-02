@@ -62,6 +62,16 @@ export interface Status {
   secretEnabled: boolean
   /** False when COUCHHUB_DOCUMENTS=false: the document browser is switched off. */
   documentsEnabled: boolean
+  /**
+   * What the container was started with, for the install wizard. Absent once a
+   * server is configured, and never carries the admin password.
+   */
+  setupDefaults?: {
+    name: string
+    adminBaseUrl: string
+    publicBaseUrl: string
+    adminUser: string
+  }
 }
 
 export const statusQuery = {
