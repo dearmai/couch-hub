@@ -2,7 +2,7 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Link } from "react-router"
+import { Link, useNavigate } from "react-router"
 import { AlertTriangle, Database, Loader2, Plus, PackagePlus } from "lucide-react"
 
 import { AdoptVaultDialog } from "@/components/AdoptVaultDialog"
@@ -39,6 +39,22 @@ export default function Vaults() {
   const [adoptOpen, setAdoptOpen] = useState(false)
   const [created, setCreated] = useState<VaultWithCredentials | null>(null)
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+
+  // A new vault opens on its own page rather than in a dialog of credentials
+  // nobody asked for yet: the code is issued there, one per device, and a
+  // dialog that pops one on creation both wastes it and hands the operator a QR
+  // squeezed into a modal.
+  //
+  // The exception is a vault whose secrets were never stored. That dialog is
+  // the only time they exist.
+  function afterIssue(data: VaultWithCredentials) {
+    if (!data.secretsPersisted) {
+      setCreated(data)
+      return
+    }
+    navigate(`/vaults/${data.vault.id}?tab=clients`)
+  }
 
   const { data: vaults, isPending } = useQuery(vaultsQuery)
   const { data: status } = useQuery(statusQuery)
@@ -57,10 +73,10 @@ export default function Vaults() {
     mutationFn: vaultsApi.create,
     onSuccess: async (data) => {
       setCreateOpen(false)
-      setCreated(data)
       form.reset()
       await queryClient.invalidateQueries({ queryKey: ["vaults"] })
       await queryClient.invalidateQueries({ queryKey: ["status"] })
+      afterIssue(data)
     },
   })
 
@@ -149,7 +165,7 @@ export default function Vaults() {
         </ul>
       )}
 
-      <AdoptVaultDialog open={adoptOpen} onOpenChange={setAdoptOpen} onAdopted={setCreated} />
+      <AdoptVaultDialog open={adoptOpen} onOpenChange={setAdoptOpen} onAdopted={afterIssue} />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
@@ -219,7 +235,9 @@ export default function Vaults() {
         <DialogContent className="max-h-[90svh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{created?.vault.name} 준비 완료</DialogTitle>
-            <DialogDescription>Obsidian에서 Setup URI를 불러오면 동기화가 시작됩니다.</DialogDescription>
+            <DialogDescription>
+              COUCHHUB_SECRET이 없어 자격증명이 저장되지 않았습니다. 지금 옮겨두지 않으면 다시 볼 수 없습니다.
+            </DialogDescription>
           </DialogHeader>
 
           {created ? (

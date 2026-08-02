@@ -42,7 +42,7 @@ export function SetupCredentials({
         </Alert>
       ) : null}
 
-      <div className="grid gap-5 md:grid-cols-[minmax(0,280px)_1fr] md:items-start">
+      <div className="grid gap-5 lg:grid-cols-[minmax(260px,300px)_1fr] lg:items-start">
         {credentials.qrSvg ? (
           <div className="flex flex-col items-center gap-3">
             {/* The SVG comes from our own server, generated from the URI we just
@@ -60,7 +60,10 @@ export function SetupCredentials({
                 than a Button: this shadcn Button has no asChild escape hatch,
                 and the browser must follow the obsidian:// scheme itself for the
                 OS to hand it to Obsidian. */}
-            <a href={credentials.setupUri} className={buttonVariants({ variant: "outline", size: "sm" })}>
+            <a
+              href={credentials.setupUri}
+              className={`${buttonVariants({ variant: "outline", size: "sm" })} h-auto w-full max-w-[300px] justify-center py-2 text-center whitespace-normal`}
+            >
               <ExternalLink aria-hidden /> 이 컴퓨터의 Obsidian에서 열기
             </a>
           </div>
@@ -135,7 +138,10 @@ export function SetupCredentials({
                 className="w-full max-w-[240px] rounded-lg border bg-white p-3 [&_svg]:block [&_svg]:h-auto [&_svg]:w-full"
                 dangerouslySetInnerHTML={{ __html: credentials.plainQrSvg }}
               />
-              <a href={credentials.plainSetupUri} className={buttonVariants({ variant: "outline", size: "sm" })}>
+              <a
+                href={credentials.plainSetupUri}
+                className={`${buttonVariants({ variant: "outline", size: "sm" })} h-auto w-full max-w-[260px] justify-center py-2 text-center whitespace-normal`}
+              >
                 <ExternalLink aria-hidden /> PIN 없이 이 컴퓨터에서 열기
               </a>
               <p className="text-muted-foreground text-center text-xs">

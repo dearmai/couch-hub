@@ -105,7 +105,10 @@ test("creates a vault and issues a working Setup URI", async ({ page, request })
   await page.getByLabel("Vault 이름").fill(VAULT_NAME)
   await page.getByRole("button", { name: "만들기", exact: true }).click()
 
-  await expect(page.getByText(`${VAULT_NAME} 준비 완료`)).toBeVisible()
+  // Creation lands on the vault's own page, not in a dialog of credentials
+  // nobody asked for: the code is issued there, one per device.
+  await expect(page).toHaveURL(/\/vaults\/vault-[^/]+\?tab=clients$/)
+  await page.getByRole("button", { name: /코드 발급/ }).click()
   await expect(page.getByRole("img", { name: "Setup URI QR code" })).toBeVisible()
 
   await openPlainSection(page)
@@ -154,7 +157,7 @@ test("creates a vault and issues a working Setup URI", async ({ page, request })
   // A wrong PIN must fail rather than yield anything.
   expect(() => parseSetupURI(encryptedUri, "000000")).toThrow()
 
-  await page.getByRole("button", { name: "닫기" }).click()
+  await page.goto("/vaults")
   await expect(page.getByRole("link", { name: new RegExp(VAULT_NAME) })).toBeVisible()
 })
 
@@ -259,23 +262,24 @@ test("deletion requires the exact vault name", async ({ page, request }) => {
 test.describe("mobile viewport", () => {
   test.use({ viewport: { width: 393, height: 852 }, isMobile: true, hasTouch: true })
 
-  test("credentials dialog fits a phone screen", async ({ page }) => {
+  test("the issued code fits a phone screen and stays scannable", async ({ page }) => {
     await page.goto("/vaults")
     await page.getByRole("button", { name: /Vault 만들기/ }).first().click()
     await page.getByLabel("Vault 이름").fill("mobile-fit")
     await page.getByRole("button", { name: "만들기", exact: true }).click()
 
+    await page.getByRole("button", { name: /코드 발급/ }).click()
     const qr = page.getByRole("img", { name: "Setup URI QR code" })
     await expect(qr).toBeVisible()
 
     // A dense QR is close to 600px square at its intrinsic size. It has to be
-    // scaled down to the dialog, not scrolled sideways to.
-    const dialog = page.getByRole("dialog")
-    const box = await dialog.boundingBox()
+    // scaled to the viewport rather than scrolled sideways to - and not scaled
+    // so far down that a camera cannot read it.
     const qrBox = await qr.boundingBox()
-    expect(qrBox!.width).toBeLessThanOrEqual(box!.width)
+    expect(qrBox!.width).toBeLessThanOrEqual(393)
+    expect(qrBox!.width).toBeGreaterThanOrEqual(200)
 
-    const overflow = await dialog.evaluate((el) => el.scrollWidth - el.clientWidth)
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
     expect(overflow).toBeLessThanOrEqual(1)
   })
 })
@@ -327,8 +331,8 @@ test.describe("adopting an existing database", () => {
     await page.getByLabel("기존 E2EE 패스프레이즈").fill("the-original-passphrase")
     await page.getByRole("button", { name: "추가", exact: true }).click()
 
-    await expect(page.getByRole("img", { name: "Setup URI QR code" })).toBeVisible()
-    await page.getByRole("button", { name: "닫기" }).click()
+    // Adoption lands on the vault's page, same as creation.
+    await expect(page).toHaveURL(/\/vaults\/vault-[^/]+\?tab=clients$/)
 
     // The document is still there and the database was not recreated.
     const after = await (await couch(`/${ADOPT_DB}`)).json()
