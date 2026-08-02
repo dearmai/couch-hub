@@ -1,5 +1,5 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import type { Profile } from "@/lib/profiles"
+import { profileLabel, type Profile } from "@/lib/profiles"
 
 /**
  * Picks one of the registered CouchDB servers.
@@ -37,13 +37,20 @@ export function ProfileSelect({
       disabled={disabled}
     >
       <SelectTrigger id={id}>
-        <SelectValue placeholder={placeholder} />
+        {/* The value is a profile id, and the trigger renders whatever the
+            value is unless told otherwise - which would put a generated id in
+            front of the operator instead of the server's name. */}
+        <SelectValue placeholder={placeholder}>
+          {(value: string | null) => {
+            const selected = options.find((p) => p.id === value)
+            return selected ? profileLabel(selected) : placeholder
+          }}
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>
         {options.map((p) => (
           <SelectItem key={p.id} value={p.id}>
-            {p.name}
-            {p.primary ? " · 주 서버" : ""}
+            {profileLabel(p)}
           </SelectItem>
         ))}
       </SelectContent>

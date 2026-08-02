@@ -62,3 +62,8 @@ export function primaryProfile(profiles: Profile[] | undefined): Profile | undef
 export function profileName(profiles: Profile[] | undefined, id: string): string {
   return profiles?.find((p) => p.id === id)?.name ?? id
 }
+
+/** How a server is named wherever one is being chosen. */
+export function profileLabel(profile: Profile): string {
+  return profile.primary ? `${profile.name} · 주 서버` : profile.name
+}

@@ -97,6 +97,17 @@ test("주 서버로 moves the primary flag", async ({ page, request }) => {
   expect(vault.profileId).toBe((await profiles(request)).find((p) => p.primary)?.id)
 })
 
+test("the server picker shows names, not ids", async ({ page }) => {
+  await page.goto("/vaults")
+  await page.getByRole("button", { name: /기존 DB 추가/ }).first().click()
+
+  // The select's value is a generated profile id, which is what the trigger
+  // renders unless it is told how to label it.
+  const trigger = page.locator("#adopt-profile")
+  await expect(trigger).toContainText("주 서버")
+  await expect(trigger).not.toContainText("profile-")
+})
+
 test("a server holding vaults cannot be removed", async ({ page, request }) => {
   const target = (await profiles(request)).find((p) => p.name === SECOND_NAME)!
   expect(target.vaultCount).toBeGreaterThan(0)
