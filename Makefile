@@ -112,10 +112,12 @@ REMOTE_COMPOSE ?= podman compose
 # hanging on a password prompt inside a make recipe.
 SSH ?= ssh -o BatchMode=yes
 
-# Tag for the image built here and loaded there. Not a registry reference:
-# nothing is published, the image is assembled on the remote from a binary this
-# machine compiled.
-REMOTE_IMAGE ?= couchhub:deploy
+# Image name for the build assembled on the remote. Not a registry reference -
+# nothing is published. The tag is the binary's content hash, added at deploy
+# time: compose only recreates a container whose configuration changed, and a
+# fixed tag is not a change, so a new binary under an old tag would be built,
+# shipped, and then quietly not run.
+REMOTE_IMAGE ?= couchhub
 
 # What the remote actually needs. No source, no toolchain: it receives a Linux
 # binary with the UI already embedded and does nothing but copy it into an
@@ -191,30 +193,37 @@ remote-sync:
 # 4 MB alpine pull. That matters on a host too small to run npm and the Go
 # toolchain without swapping.
 #
-# `up -d` is both the first start and every restart after it: compose recreates
-# the containers whose image or configuration changed and leaves the rest
-# running, so CouchDB is not bounced for a CouchHub-only change.
+# `up -d` is both the first start and every restart after it. podman-compose
+# recreates the project's containers whenever anything in the configuration
+# changed, CouchDB included - a few seconds of downtime per deploy, and nothing
+# lost, since the data is in named volumes. A deploy that changes nothing
+# recreates nothing.
 remote-deploy: remote-check remote-dist remote-sync
-	$(SSH) $(REMOTE_HOST) 'cd $(REMOTE_DIR) && \
-		$(REMOTE_PODMAN) build -f Containerfile.prebuilt -t $(REMOTE_IMAGE) . && \
-		COUCHHUB_IMAGE=$(REMOTE_IMAGE) $(REMOTE_COMPOSE) up -d --remove-orphans'
+	@tag=$$(shasum -a 256 dist/couchhub-linux | cut -c1-12); \
+	echo "image $(REMOTE_IMAGE):$$tag"; \
+	$(SSH) $(REMOTE_HOST) "cd $(REMOTE_DIR) && \
+		$(REMOTE_PODMAN) build -f Containerfile.prebuilt -t $(REMOTE_IMAGE):$$tag . && \
+		COUCHHUB_IMAGE=$(REMOTE_IMAGE):$$tag $(REMOTE_COMPOSE) up -d --remove-orphans && \
+		$(REMOTE_PODMAN) images --format '{{.Repository}}:{{.Tag}}' \
+			| grep -E '(^|/)$(REMOTE_IMAGE):' | grep -v ':$$tag\$$' \
+			| xargs -r $(REMOTE_PODMAN) rmi -f >/dev/null 2>&1 || true"
 	@$(MAKE) --no-print-directory remote-ps
 
 ## remote-restart: restart the running containers without rebuilding
 remote-restart:
-	$(SSH) $(REMOTE_HOST) 'cd $(REMOTE_DIR) && COUCHHUB_IMAGE=$(REMOTE_IMAGE) $(REMOTE_COMPOSE) restart'
+	$(SSH) $(REMOTE_HOST) 'cd $(REMOTE_DIR) && $(REMOTE_COMPOSE) restart'
 
 ## remote-ps: show the remote container states
 remote-ps:
-	$(SSH) $(REMOTE_HOST) 'cd $(REMOTE_DIR) && COUCHHUB_IMAGE=$(REMOTE_IMAGE) $(REMOTE_COMPOSE) ps'
+	$(SSH) $(REMOTE_HOST) 'cd $(REMOTE_DIR) && $(REMOTE_COMPOSE) ps'
 
 ## remote-logs: follow the remote logs (SERVICE=couchhub for one service)
 remote-logs:
-	$(SSH) -t $(REMOTE_HOST) 'cd $(REMOTE_DIR) && COUCHHUB_IMAGE=$(REMOTE_IMAGE) $(REMOTE_COMPOSE) logs -f --tail 100 $(SERVICE)'
+	$(SSH) -t $(REMOTE_HOST) 'cd $(REMOTE_DIR) && $(REMOTE_COMPOSE) logs -f --tail 100 $(SERVICE)'
 
 ## remote-down: stop the remote stack, keeping its volumes
 remote-down:
-	$(SSH) $(REMOTE_HOST) 'cd $(REMOTE_DIR) && COUCHHUB_IMAGE=$(REMOTE_IMAGE) $(REMOTE_COMPOSE) down'
+	$(SSH) $(REMOTE_HOST) 'cd $(REMOTE_DIR) && $(REMOTE_COMPOSE) down'
 
 ## remote-boot: make the containers come back after a reboot (rootless podman)
 # `restart: unless-stopped` is honoured by the podman restart service, and a

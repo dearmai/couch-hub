@@ -122,9 +122,15 @@ address for that, being the one that is routable from another host.
 ## Deploying to a server
 
 `make remote-deploy` builds here, ships the result, and starts the stack under
-`podman compose`. The same command is the restart: compose recreates the
-containers whose image or configuration changed and leaves the rest alone, so a
-CouchHub-only change does not bounce CouchDB.
+`podman compose`. The same command is the restart: podman-compose recreates the
+project's containers whenever the configuration changed, CouchDB included — a
+few seconds of downtime per deploy, with nothing lost, since the data lives in
+named volumes. A deploy that changes nothing recreates nothing.
+
+The image is tagged with the binary's content hash. A fixed tag would not read
+as a configuration change, so a rebuilt binary would be shipped and then quietly
+not run; hashing it also means an unchanged build redeploys as a no-op. Older
+tags are removed on the way out.
 
 Nothing is compiled on the remote. The UI is built and the binary
 cross-compiled locally — `GOARCH` read from the host rather than assumed, since
