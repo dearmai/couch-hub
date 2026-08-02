@@ -113,6 +113,48 @@ The replication document lives on the target, so the **target CouchDB** has to
 be able to reach the source. CouchHub fills in the source's Obsidian-facing
 address for that, being the one that is routable from another host.
 
+## Deploying to a server
+
+`make remote-deploy` ships the source to the host, builds the image there, and
+starts the whole stack — CouchDB, CouchHub and Caddy — under `podman compose`.
+The same command is the restart: compose recreates the containers whose image or
+configuration changed and leaves the rest alone, so a CouchHub-only change does
+not bounce CouchDB.
+
+The remote builds its own image rather than being handed one. The result then
+matches the architecture that runs it, which a build on an arm64 laptop for an
+amd64 server would not, and nothing has to be published to a registry.
+
+```sh
+cp .env.example .env    # fill in the secrets
+make remote-env         # upload it once - 0600, and never synced afterwards
+make remote-deploy
+```
+
+After that, `make remote-deploy` on its own. `.env` stays out of every sync, so
+the remote keeps the configuration it is running with.
+
+| Target | What it does |
+|---|---|
+| `remote-check` | ssh, podman, compose provider and `.env`, without changing anything |
+| `remote-deploy` | sync, build on the remote, start or restart |
+| `remote-restart` | restart the containers without rebuilding |
+| `remote-ps` / `remote-logs` | states; `SERVICE=couchhub make remote-logs` for one |
+| `remote-down` | stop the stack, keeping its volumes |
+| `remote-boot` | survive a reboot: lingering plus `podman-restart.service` |
+
+| Variable | Default |
+|---|---|
+| `REMOTE_HOST` | `dearmai@192.168.20.22` |
+| `REMOTE_DIR` | `/apps/couch-hub` |
+| `REMOTE_COMPOSE` | `podman compose` |
+
+The remote needs ssh key authentication, `podman` with a compose provider, and
+`tar`. The tree travels as a tar stream rather than over rsync, which a minimal
+server install does not necessarily have. Source directories are replaced
+wholesale on each deploy, so a file deleted here disappears there too — and
+`.env`, being outside that list, is left alone.
+
 ## Development
 
 ```sh

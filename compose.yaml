@@ -30,6 +30,13 @@ services:
 
   couchhub:
     image: ${COUCHHUB_IMAGE:-ghcr.io/dearmai/couchhub:latest}
+    # Built from the source next to this file when `up` is given --build, which
+    # is how `make remote-deploy` works: the host running the containers builds
+    # its own image, so nothing has to be published to a registry first. Without
+    # --build the published image is pulled as before.
+    build:
+      context: .
+      dockerfile: Containerfile
     restart: unless-stopped
     depends_on:
       couchdb:
