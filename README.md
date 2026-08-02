@@ -121,15 +121,20 @@ address for that, being the one that is routable from another host.
 
 ## Deploying to a server
 
-`make remote-deploy` ships the source to the host, builds the image there, and
-starts the whole stack — CouchDB, CouchHub and Caddy — under `podman compose`.
-The same command is the restart: compose recreates the containers whose image or
-configuration changed and leaves the rest alone, so a CouchHub-only change does
-not bounce CouchDB.
+`make remote-deploy` builds here, ships the result, and starts the stack under
+`podman compose`. The same command is the restart: compose recreates the
+containers whose image or configuration changed and leaves the rest alone, so a
+CouchHub-only change does not bounce CouchDB.
 
-The remote builds its own image rather than being handed one. The result then
-matches the architecture that runs it, which a build on an arm64 laptop for an
-amd64 server would not, and nothing has to be published to a registry.
+Nothing is compiled on the remote. The UI is built and the binary
+cross-compiled locally — `GOARCH` read from the host rather than assumed, since
+the wrong one produces a container that exits with an exec format error — and
+the remote assembles an image around it with `Containerfile.prebuilt`, which is
+a copy and a 4 MB alpine pull. A server too small to run npm and the Go
+toolchain comfortably never has to.
+
+`Containerfile` remains the self-contained build for `make image` and CI: it
+takes source and needs nothing prepared in advance.
 
 ```sh
 make remote-env-init    # .env from the example, both secrets generated
@@ -149,7 +154,8 @@ the remote keeps the configuration it is running with.
 |---|---|
 | `remote-env-init` | write a local `.env` with generated secrets, never overwriting |
 | `remote-check` | ssh, podman, compose provider and `.env`, without changing anything |
-| `remote-deploy` | sync, build on the remote, start or restart |
+| `remote-dist` | cross-compile the Linux binary into `dist/couchhub-linux` |
+| `remote-deploy` | build here, ship the binary, start or restart |
 | `remote-restart` | restart the containers without rebuilding |
 | `remote-ps` / `remote-logs` | states; `SERVICE=couchhub make remote-logs` for one |
 | `remote-down` | stop the stack, keeping its volumes |
@@ -212,10 +218,11 @@ Note that 10021 is also the Vite dev server's port, so a host running
 `make dev-server` and the deployed stack at once needs one of them moved.
 
 The remote needs ssh key authentication, `podman` with a compose provider, and
-`tar`. The tree travels as a tar stream rather than over rsync, which a minimal
-server install does not necessarily have. Source directories are replaced
-wholesale on each deploy, so a file deleted here disappears there too — and
-`.env`, being outside that list, is left alone.
+`tar`. What travels is `compose.yaml`, `Containerfile.prebuilt`, the Caddyfile
+and the binary, as a tar stream rather than over rsync — which a minimal server
+install does not necessarily have. `caddy/` and `dist/` are cleared before the
+archive is unpacked, so a stale binary cannot survive a deploy, and `.env` is
+outside that list and never touched.
 
 ## Development
 

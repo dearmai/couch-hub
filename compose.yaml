@@ -36,14 +36,9 @@ services:
       start_period: 30s
 
   couchhub:
+    # `make remote-deploy` builds the image on the developer's machine and sets
+    # this to the local tag, so a small host never compiles anything.
     image: ${COUCHHUB_IMAGE:-ghcr.io/dearmai/couchhub:latest}
-    # Built from the source next to this file when `up` is given --build, which
-    # is how `make remote-deploy` works: the host running the containers builds
-    # its own image, so nothing has to be published to a registry first. Without
-    # --build the published image is pulled as before.
-    build:
-      context: .
-      dockerfile: Containerfile
     restart: unless-stopped
     depends_on:
       couchdb:
@@ -59,9 +54,13 @@ services:
       #
       # The administration address is the compose service, not the published
       # port: it is the shortest path and needs nothing published at all.
+      # Built from SYNC_DOMAIN rather than defaulted to it: podman-compose does
+      # not interpolate a variable nested inside another one's default, and
+      # leaves ${A:-https://${B}} in the value verbatim - which then gets stored
+      # as a vault's server address and fails on every client.
       COUCHHUB_COUCHDB_NAME: ${COUCHHUB_COUCHDB_NAME:-homelab}
       COUCHHUB_COUCHDB_URL: http://couchdb:5984
-      COUCHHUB_COUCHDB_PUBLIC_URL: ${COUCHHUB_COUCHDB_PUBLIC_URL:-https://${SYNC_DOMAIN}}
+      COUCHHUB_COUCHDB_PUBLIC_URL: https://${SYNC_DOMAIN}
       COUCHHUB_COUCHDB_USER: ${COUCHDB_USER:?set COUCHDB_USER in .env}
       COUCHHUB_COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:?set COUCHDB_PASSWORD in .env}
       COUCHHUB_POLL_INTERVAL: ${COUCHHUB_POLL_INTERVAL:-5m}

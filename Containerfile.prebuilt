@@ -1,0 +1,33 @@
+# Assembles the image around a binary that was already built, for a host too
+# small to compile one. `make remote-deploy` cross-compiles on the developer's
+# machine and ships the result; the only work left here is a copy.
+#
+# Containerfile is the self-contained counterpart: it builds the UI and the
+# binary from source and needs nothing prepared in advance.
+
+# Alpine only to borrow a CA bundle and to create a /data the runtime user owns.
+# scratch has no shell, so a directory with the right ownership has to come from
+# somewhere - and a named volume inherits its ownership from the image, which
+# would otherwise leave it root-owned and unwritable.
+FROM docker.io/library/alpine:3 AS stage
+RUN mkdir -p /out/data && chown 65532:65532 /out/data
+
+FROM scratch
+
+COPY --from=stage /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=stage --chown=65532:65532 /out/data /data
+
+# Built with GOOS=linux and the remote's GOARCH; see the remote-deploy recipe.
+COPY dist/couchhub-linux /couchhub
+
+# Non-root. A numeric id needs no /etc/passwd, which scratch does not have.
+USER 65532:65532
+
+ENV COUCHHUB_ADDR=:10020 \
+    COUCHHUB_DATA_DIR=/data
+
+EXPOSE 10020
+VOLUME ["/data"]
+
+ENTRYPOINT ["/couchhub"]
+CMD ["serve"]

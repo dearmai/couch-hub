@@ -98,9 +98,9 @@ check: vet test verify-uri verify-livesync
 
 # --- remote deployment ------------------------------------------------------
 #
-# The remote host builds its own image from the synced source, so nothing has to
-# be published to a registry and the image matches the architecture it runs on -
-# which a build on an arm64 laptop for an amd64 server would not.
+# Everything expensive happens here. The remote receives a Linux binary with the
+# UI embedded and assembles an image around it, so a small host never runs npm
+# or the Go toolchain - and nothing has to be published to a registry.
 #
 # Override any of these on the command line:
 #   make remote-deploy REMOTE_HOST=user@host REMOTE_DIR=/srv/couch-hub
@@ -112,22 +112,20 @@ REMOTE_COMPOSE ?= podman compose
 # hanging on a password prompt inside a make recipe.
 SSH ?= ssh -o BatchMode=yes
 
-# The tree is shipped as a tar stream rather than with rsync, which a minimal
-# server install does not necessarily have. tar and ssh always do.
-#
-# REMOTE_TREES are removed before the archive is unpacked, so a file deleted
-# here disappears there too. Naming them - instead of clearing the directory -
-# keeps .env and anything else the remote owns out of the blast radius.
-REMOTE_TREES := cmd internal web caddy scripts
+# Tag for the image built here and loaded there. Not a registry reference:
+# nothing is published, the image is assembled on the remote from a binary this
+# machine compiled.
+REMOTE_IMAGE ?= couchhub:deploy
 
-# Build inputs only. Everything else is either regenerated inside the image,
-# host-specific, or - in .env's case - the remote's own to keep.
-REMOTE_EXCLUDES := \
-	--exclude ./.git --exclude ./.env --exclude ./data --exclude ./bin --exclude ./.air \
-	--exclude ./tools --exclude ./node_modules --exclude ./web/node_modules \
-	--exclude ./scripts/node_modules --exclude ./web/dist --exclude ./web/.e2e-data \
-	--exclude ./web/test-results --exclude ./web/playwright-report \
-	--exclude ./internal/httpapi/webdist/assets
+# What the remote actually needs. No source, no toolchain: it receives a Linux
+# binary with the UI already embedded and does nothing but copy it into an
+# image. REMOTE_TREES are cleared before the archive is unpacked, so a stale
+# binary or Caddyfile cannot survive a deploy - and .env, being outside the
+# list, is never touched.
+REMOTE_TREES := caddy dist
+REMOTE_FILES := compose.yaml Containerfile.prebuilt caddy dist/couchhub-linux
+
+REMOTE_PODMAN ?= podman
 
 ## remote-check: verify the remote host is reachable and ready to deploy
 remote-check:
@@ -165,41 +163,70 @@ remote-env:
 	@# even for the moment between writing it and fixing its mode.
 	$(SSH) $(REMOTE_HOST) 'mkdir -p $(REMOTE_DIR) && umask 077 && cat > $(REMOTE_DIR)/.env' < .env
 
-## remote-sync: copy the source tree to the remote host
+## remote-dist: cross-compile a Linux binary for the remote, UI embedded
+# The architecture is read from the remote rather than assumed: a binary built
+# for the wrong one starts and exits immediately with an exec format error,
+# which reads like a corrupt image rather than a wrong compiler flag.
+remote-dist: embed
+	@arch=$$($(SSH) $(REMOTE_HOST) uname -m); \
+	case "$$arch" in \
+		x86_64|amd64) goarch=amd64;; \
+		aarch64|arm64) goarch=arm64;; \
+		*) echo "지원하지 않는 원격 아키텍처: $$arch"; exit 1;; \
+	esac; \
+	echo "building linux/$$goarch for $(REMOTE_HOST)"; \
+	mkdir -p dist; \
+	GOOS=linux GOARCH=$$goarch CGO_ENABLED=0 \
+		go build -trimpath -ldflags="-s -w" -o dist/couchhub-linux ./cmd/couchhub
+	@ls -lh dist/couchhub-linux | awk '{print "  binary: " $$5}'
+
+## remote-sync: ship the built binary and the compose files
 remote-sync:
-	tar czf - $(REMOTE_EXCLUDES) . | \
+	tar czf - $(REMOTE_FILES) | \
 		$(SSH) $(REMOTE_HOST) 'mkdir -p $(REMOTE_DIR) && cd $(REMOTE_DIR) && rm -rf $(REMOTE_TREES) && tar xzf -'
 
-## remote-deploy: sync, build on the remote, and start or restart the stack
-# `up -d --build` is both the first start and every restart after it: compose
-# recreates the containers whose image or configuration changed and leaves the
-# rest running, so CouchDB is not bounced for a CouchHub-only change.
-remote-deploy: remote-check remote-sync
-	$(SSH) $(REMOTE_HOST) 'cd $(REMOTE_DIR) && $(REMOTE_COMPOSE) up -d --build --remove-orphans'
+## remote-deploy: build here, ship the binary, and start or restart the stack
+# Nothing is compiled on the remote: it receives a Linux binary with the UI
+# already embedded and assembles an image around it, which is a copy and a
+# 4 MB alpine pull. That matters on a host too small to run npm and the Go
+# toolchain without swapping.
+#
+# `up -d` is both the first start and every restart after it: compose recreates
+# the containers whose image or configuration changed and leaves the rest
+# running, so CouchDB is not bounced for a CouchHub-only change.
+remote-deploy: remote-check remote-dist remote-sync
+	$(SSH) $(REMOTE_HOST) 'cd $(REMOTE_DIR) && \
+		$(REMOTE_PODMAN) build -f Containerfile.prebuilt -t $(REMOTE_IMAGE) . && \
+		COUCHHUB_IMAGE=$(REMOTE_IMAGE) $(REMOTE_COMPOSE) up -d --remove-orphans'
 	@$(MAKE) --no-print-directory remote-ps
 
 ## remote-restart: restart the running containers without rebuilding
 remote-restart:
-	$(SSH) $(REMOTE_HOST) 'cd $(REMOTE_DIR) && $(REMOTE_COMPOSE) restart'
+	$(SSH) $(REMOTE_HOST) 'cd $(REMOTE_DIR) && COUCHHUB_IMAGE=$(REMOTE_IMAGE) $(REMOTE_COMPOSE) restart'
 
 ## remote-ps: show the remote container states
 remote-ps:
-	$(SSH) $(REMOTE_HOST) 'cd $(REMOTE_DIR) && $(REMOTE_COMPOSE) ps'
+	$(SSH) $(REMOTE_HOST) 'cd $(REMOTE_DIR) && COUCHHUB_IMAGE=$(REMOTE_IMAGE) $(REMOTE_COMPOSE) ps'
 
 ## remote-logs: follow the remote logs (SERVICE=couchhub for one service)
 remote-logs:
-	$(SSH) -t $(REMOTE_HOST) 'cd $(REMOTE_DIR) && $(REMOTE_COMPOSE) logs -f --tail 100 $(SERVICE)'
+	$(SSH) -t $(REMOTE_HOST) 'cd $(REMOTE_DIR) && COUCHHUB_IMAGE=$(REMOTE_IMAGE) $(REMOTE_COMPOSE) logs -f --tail 100 $(SERVICE)'
 
 ## remote-down: stop the remote stack, keeping its volumes
 remote-down:
-	$(SSH) $(REMOTE_HOST) 'cd $(REMOTE_DIR) && $(REMOTE_COMPOSE) down'
+	$(SSH) $(REMOTE_HOST) 'cd $(REMOTE_DIR) && COUCHHUB_IMAGE=$(REMOTE_IMAGE) $(REMOTE_COMPOSE) down'
 
 ## remote-boot: make the containers come back after a reboot (rootless podman)
 # `restart: unless-stopped` is honoured by the podman restart service, and a
 # rootless user's services only run outside a login session with lingering on.
 # Without both, a reboot leaves the host with nothing running.
+# enable-linger is a privileged call - polkit denies it to a plain ssh session
+# with no seat - so it falls back to sudo on a tty before giving up.
 remote-boot:
-	$(SSH) $(REMOTE_HOST) 'loginctl enable-linger $$USER && systemctl --user enable --now podman-restart.service'
+	@$(SSH) $(REMOTE_HOST) 'loginctl enable-linger $$USER' 2>/dev/null \
+		|| $(SSH) -t $(REMOTE_HOST) 'sudo loginctl enable-linger $$USER' \
+		|| { echo "linger 설정 실패. 원격에서 'sudo loginctl enable-linger <계정>' 을 직접 실행하세요"; exit 1; }
+	$(SSH) $(REMOTE_HOST) 'systemctl --user enable --now podman-restart.service'
 
 ## dev-server: run CouchDB, the Vite dev server and the API under process-compose
 dev-server: web/node_modules .air/air
@@ -227,9 +254,9 @@ dev-reset:
 ## clean: remove build output
 # webdist keeps .gitkeep: `go build` needs the directory to exist.
 clean:
-	rm -rf bin web/dist
+	rm -rf bin dist web/dist
 	find internal/httpapi/webdist -mindepth 1 ! -name .gitkeep -delete
 
 .PHONY: help web embed build build-go image test vet gen-template verify-uri verify-livesync e2e check \
-	remote-check remote-env-init remote-env remote-sync remote-deploy remote-restart remote-ps remote-logs remote-down remote-boot \
+	remote-check remote-env-init remote-env remote-dist remote-sync remote-deploy remote-restart remote-ps remote-logs remote-down remote-boot \
 	dev-server dev-down dev-ps dev-reset clean
