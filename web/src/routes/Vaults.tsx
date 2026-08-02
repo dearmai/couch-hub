@@ -7,6 +7,7 @@ import { AlertTriangle, Database, Loader2, Plus, PackagePlus } from "lucide-reac
 
 import { AdoptVaultDialog } from "@/components/AdoptVaultDialog"
 import { PageHeader } from "@/components/PageHeader"
+import { ProfileSelect } from "@/components/ProfileSelect"
 import { SetupCredentials } from "@/components/SetupCredentials"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -24,6 +25,7 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/c
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ApiError, statusQuery } from "@/lib/api"
+import { primaryProfile, profileName, profilesQuery } from "@/lib/profiles"
 import {
   createVaultSchema,
   vaultsApi,
@@ -40,11 +42,16 @@ export default function Vaults() {
 
   const { data: vaults, isPending } = useQuery(vaultsQuery)
   const { data: status } = useQuery(statusQuery)
+  const { data: profiles } = useQuery(profilesQuery)
+  // With one server the choice is not a choice, so the field only appears once
+  // there is something to choose between.
+  const multipleServers = (profiles?.length ?? 0) > 1
 
   const form = useForm<CreateVaultValues>({
     resolver: zodResolver(createVaultSchema),
-    defaultValues: { name: "", dbName: "" },
+    defaultValues: { profileId: "", name: "", dbName: "" },
   })
+  const profileId = form.watch("profileId")
 
   const create = useMutation({
     mutationFn: vaultsApi.create,
@@ -115,6 +122,9 @@ export default function Vaults() {
                 <div className="min-w-0">
                   <div className="truncate font-medium">{v.name}</div>
                   <div className="text-muted-foreground truncate font-mono text-xs">{v.dbName}</div>
+                  {multipleServers ? (
+                    <div className="text-muted-foreground truncate text-xs">{profileName(profiles, v.profileId)}</div>
+                  ) : null}
                 </div>
                 <div className="flex shrink-0 gap-1">
                   {v.adopted ? (
@@ -152,6 +162,19 @@ export default function Vaults() {
 
           <form id="create-vault" onSubmit={form.handleSubmit((v) => create.mutate(v))}>
             <FieldGroup>
+              {multipleServers ? (
+                <Field>
+                  <FieldLabel htmlFor="vault-profile">CouchDB</FieldLabel>
+                  <ProfileSelect
+                    id="vault-profile"
+                    value={profileId || (primaryProfile(profiles)?.id ?? "")}
+                    onChange={(id) => form.setValue("profileId", id)}
+                    profiles={profiles}
+                  />
+                  <FieldDescription>데이터베이스와 계정이 이 서버에 만들어집니다.</FieldDescription>
+                </Field>
+              ) : null}
+
               <Field>
                 <FieldLabel htmlFor="vault-name">Vault 이름</FieldLabel>
                 <Input id="vault-name" autoComplete="off" placeholder="업무 노트" {...form.register("name")} />

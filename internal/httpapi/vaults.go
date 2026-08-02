@@ -283,6 +283,17 @@ func (s *Server) handleDeleteVault(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A move in flight owns a database on another server. Deleting the vault
+	// underneath it would leave that copy behind with nothing pointing at it.
+	if _, err := s.store.Migration(v.ID); err == nil {
+		writeError(w, http.StatusConflict, "migration_in_progress",
+			errors.New("이 Vault는 다른 CouchDB로 이동 중입니다. 이동을 끝내거나 취소한 뒤 삭제하세요"))
+		return
+	} else if err != store.ErrNotFound {
+		fail(w, err)
+		return
+	}
+
 	// Deleting a vault destroys every note in it, so the caller has to echo the
 	// name back. A bare DELETE is too easy to fire by accident.
 	if confirm := r.URL.Query().Get("confirm"); confirm != v.Name {
@@ -323,29 +334,4 @@ func (s *Server) handleDeleteVault(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// resolveProfile returns the requested profile, or the only one if there is
-// exactly one and none was named.
-func (s *Server) resolveProfile(id string) (store.Profile, error) {
-	if id != "" {
-		p, err := s.store.Profile(id)
-		if err != nil {
-			return store.Profile{}, fmt.Errorf("프로필 %q를 찾을 수 없습니다", id)
-		}
-		return p, nil
-	}
-
-	profiles, err := s.store.Profiles()
-	if err != nil {
-		return store.Profile{}, err
-	}
-	switch len(profiles) {
-	case 0:
-		return store.Profile{}, errors.New("CouchDB 프로필이 없습니다. 설치 마법사를 먼저 완료하세요")
-	case 1:
-		return profiles[0], nil
-	default:
-		return store.Profile{}, errors.New("프로필이 여러 개입니다. 사용할 프로필을 지정하세요")
-	}
 }

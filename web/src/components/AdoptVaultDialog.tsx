@@ -1,8 +1,10 @@
+import { useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { AlertTriangle, Loader2 } from "lucide-react"
 
+import { ProfileSelect } from "@/components/ProfileSelect"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
@@ -18,6 +20,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { ApiError } from "@/lib/api"
+import { primaryProfile, profilesQuery } from "@/lib/profiles"
 import { formatBytes, formatCount } from "@/lib/stats"
 import { adoptVaultSchema, vaultsApi, type AdoptVaultValues, type VaultWithCredentials } from "@/lib/vaults"
 
@@ -39,15 +42,26 @@ export function AdoptVaultDialog({
 }) {
   const queryClient = useQueryClient()
 
-  const { data: databases, isPending: loadingDatabases } = useQuery({
-    queryKey: ["couch", "databases"],
-    queryFn: vaultsApi.databases,
-    enabled: open,
-  })
+  const { data: profiles } = useQuery(profilesQuery)
 
   const form = useForm<AdoptVaultValues>({
     resolver: zodResolver(adoptVaultSchema),
-    defaultValues: { dbName: "", name: "", e2eePassphrase: "", e2eeDisabled: false },
+    defaultValues: { profileId: "", dbName: "", name: "", e2eePassphrase: "", e2eeDisabled: false },
+  })
+  const profileId = form.watch("profileId")
+
+  // Default to the primary once the servers are known, so the database list has
+  // something to load and the field never sits empty on a single-server setup.
+  useEffect(() => {
+    if (!profileId && profiles?.length) form.setValue("profileId", primaryProfile(profiles)!.id)
+  }, [form, profileId, profiles])
+
+  const { data: databases, isPending: loadingDatabases } = useQuery({
+    // Keyed by server: the list is per CouchDB, so switching servers must not
+    // show the previous one's databases.
+    queryKey: ["couch", "databases", profileId],
+    queryFn: () => vaultsApi.databases(profileId),
+    enabled: open && profileId !== "",
   })
 
   const adopt = useMutation({
@@ -78,6 +92,21 @@ export function AdoptVaultDialog({
 
         <form id="adopt-vault" onSubmit={form.handleSubmit((v) => adopt.mutate(v))}>
           <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="adopt-profile">CouchDB</FieldLabel>
+              <ProfileSelect
+                id="adopt-profile"
+                value={profileId}
+                onChange={(id) => {
+                  form.setValue("profileId", id)
+                  // The previous server's selection means nothing here.
+                  form.setValue("dbName", "")
+                }}
+                profiles={profiles}
+              />
+              <FieldDescription>데이터베이스가 있는 서버를 고르세요.</FieldDescription>
+            </Field>
+
             <Field>
               <FieldLabel htmlFor="adopt-db">데이터베이스</FieldLabel>
               <Select

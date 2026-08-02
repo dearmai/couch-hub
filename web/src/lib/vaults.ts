@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import { api } from "@/lib/api"
+import { api, ApiError } from "@/lib/api"
 
 export interface Vault {
   id: string
@@ -47,6 +47,8 @@ export interface VaultWithCredentials {
 }
 
 export const createVaultSchema = z.object({
+  /** Empty means the primary CouchDB. */
+  profileId: z.string(),
   name: z.string().trim().min(1, "Vault 이름을 입력하세요"),
   dbName: z
     .string()
@@ -70,6 +72,8 @@ export interface DatabaseCandidate {
 
 export const adoptVaultSchema = z
   .object({
+    /** Which CouchDB the database lives on. Empty means the primary. */
+    profileId: z.string(),
     dbName: z.string().trim().min(1, "데이터베이스를 선택하세요"),
     name: z.string().trim(),
     e2eePassphrase: z.string(),
@@ -84,8 +88,56 @@ export const adoptVaultSchema = z
 
 export type AdoptVaultValues = z.infer<typeof adoptVaultSchema>
 
+/** CouchDB's own view of the copy behind a migration. */
+export interface ReplicationStatus {
+  docId: string
+  exists: boolean
+  /** initializing, running, pending, crashing, error, completed, failed. */
+  state: string
+  error?: string
+  docsRead: number
+  docsWritten: number
+  /** -1 when CouchDB does not report a backlog, which includes finished jobs. */
+  changesPending: number
+  lastUpdated?: string
+  startTime?: string
+}
+
+/** A vault being copied to another CouchDB. */
+export interface Migration {
+  vaultId: string
+  sourceProfileId: string
+  sourceName: string
+  targetProfileId: string
+  targetName: string
+  dbName: string
+  deleteSource: boolean
+  startedAt: string
+  status: ReplicationStatus
+  /** Documents on the source, so progress can be shown against a total. */
+  sourceDocCount: number
+  /** The copy has finished; only the switch-over is left. */
+  ready: boolean
+  /** Finishing changes the address clients use. */
+  setupUriChanged: boolean
+}
+
+export interface StartMigrationValues {
+  targetProfileId: string
+  deleteSource: boolean
+}
+
+export interface FinishMigrationResult {
+  vault: Vault
+  setupUriChanged: boolean
+  sourceRemoved: boolean
+  /** Cleanup that failed after the vault had already moved. */
+  sourceError?: string
+}
+
 export const vaultsApi = {
-  databases: () => api.get<DatabaseCandidate[]>("/couch/databases"),
+  databases: (profileId?: string) =>
+    api.get<DatabaseCandidate[]>(`/couch/databases${profileId ? `?profileId=${encodeURIComponent(profileId)}` : ""}`),
   adopt: (values: AdoptVaultValues) => api.post<VaultWithCredentials>("/vaults/adopt", values),
   list: () => api.get<Vault[]>("/vaults"),
   get: (id: string) => api.get<Vault>(`/vaults/${id}`),
@@ -96,6 +148,20 @@ export const vaultsApi = {
     api.delete<void>(
       `/vaults/${id}?confirm=${encodeURIComponent(confirm)}${keepData ? "&keepData=true" : ""}`,
     ),
+
+  startMigration: (id: string, values: StartMigrationValues) =>
+    api.post<Migration>(`/vaults/${id}/migrate`, values),
+  /** null when no move is in flight, which is the ordinary answer. */
+  migration: async (id: string): Promise<Migration | null> => {
+    try {
+      return await api.get<Migration>(`/vaults/${id}/migrate`)
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return null
+      throw err
+    }
+  },
+  finishMigration: (id: string) => api.post<FinishMigrationResult>(`/vaults/${id}/migrate/finish`),
+  cancelMigration: (id: string) => api.delete<void>(`/vaults/${id}/migrate`),
 }
 
 export const vaultsQuery = {

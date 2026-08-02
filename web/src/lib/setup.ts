@@ -39,18 +39,7 @@ export interface ApplyResponse {
   diagnosis: Diagnosis
 }
 
-export interface Profile {
-  id: string
-  name: string
-  adminBaseUrl: string
-  publicBaseUrl: string
-  adminUser: string
-  provisioned: boolean
-  createdAt: string
-  updatedAt: string
-}
-
-const httpUrl = z
+export const httpUrl = z
   .string()
   .trim()
   .min(1, "필수 항목입니다")
@@ -70,5 +59,4 @@ export const setupApi = {
   desired: () => api.get<{ settings: Setting[]; systemDatabases: string[] }>("/setup/desired"),
   diagnose: (values: ConnectValues) => api.post<Diagnosis>("/setup/diagnose", values),
   apply: (values: ConnectValues) => api.post<ApplyResponse>("/setup/apply", values),
-  profiles: () => api.get<Profile[]>("/profiles"),
 }

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate, useParams, useSearchParams } from "react-router"
 import { AlertTriangle, ChartLine, FileText, KeyRound, Loader2, QrCode, Settings2, Trash2 } from "lucide-react"
 
+import { MigrateVaultCard } from "@/components/MigrateVaultCard"
 import { PageHeader } from "@/components/PageHeader"
 import { SetupCredentials } from "@/components/SetupCredentials"
 import { VaultDocuments } from "@/components/VaultDocuments"
@@ -233,7 +234,9 @@ export default function VaultDetail() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="manage" className="pt-4">
+        <TabsContent value="manage" className="space-y-4 pt-4">
+          <MigrateVaultCard vault={vault} />
+
           <Card>
             <CardHeader>
               <CardTitle role="heading" aria-level={2}>

@@ -24,12 +24,19 @@ type databaseCandidate struct {
 	Registered bool `json:"registered"`
 }
 
-// handleListDatabases lists what is on the server, so adopting does not require
+// handleListDatabases lists what is on one server, so adopting does not require
 // the operator to remember exact database names.
+//
+// The server is chosen with ?profileId=; without one it is the primary.
 func (s *Server) handleListDatabases(w http.ResponseWriter, r *http.Request) {
-	_, client, err := s.defaultClient()
+	profile, err := s.resolveProfile(r.URL.Query().Get("profileId"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "no_profile", err)
+		return
+	}
+	client, err := s.clientFor(profile)
+	if err != nil {
+		fail(w, err)
 		return
 	}
 
@@ -47,9 +54,14 @@ func (s *Server) handleListDatabases(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
+	// Registration is per server: the same database name on another CouchDB is
+	// a different database, and hiding it would make the second server look
+	// emptier than it is.
 	registered := make(map[string]bool, len(vaults))
 	for _, v := range vaults {
-		registered[v.DBName] = true
+		if v.ProfileID == profile.ID {
+			registered[v.DBName] = true
+		}
 	}
 
 	system := map[string]bool{}

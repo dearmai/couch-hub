@@ -3,15 +3,12 @@ package httpapi
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/dearmai/couch-hub/internal/couch"
-	"github.com/dearmai/couch-hub/internal/idgen"
 	"github.com/dearmai/couch-hub/internal/provision"
-	"github.com/dearmai/couch-hub/internal/store"
 )
 
 // connectRequest is what the wizard's connection form submits.
@@ -130,82 +127,13 @@ func (s *Server) handleSetupApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sealed, err := s.sealer.SealString(req.AdminPassword)
+	profile, err := s.upsertProfile(req.ProfileID, req.connectRequest, diag.Ready)
 	if err != nil {
-		fail(w, err)
-		return
-	}
-
-	now := time.Now().UTC()
-	profile := store.Profile{
-		ID:                  req.ProfileID,
-		Name:                strings.TrimSpace(req.Name),
-		AdminBaseURL:        strings.TrimRight(strings.TrimSpace(req.AdminBaseURL), "/"),
-		PublicBaseURL:       strings.TrimRight(strings.TrimSpace(req.PublicBaseURL), "/"),
-		AdminUser:           req.AdminUser,
-		AdminPasswordSealed: sealed,
-		Provisioned:         diag.Ready,
-		CreatedAt:           now,
-		UpdatedAt:           now,
-	}
-	if profile.ID == "" {
-		profile.ID = idgen.New("profile")
-	} else if existing, err := s.store.Profile(profile.ID); err == nil {
-		profile.CreatedAt = existing.CreatedAt
-	}
-	if profile.Name == "" {
-		profile.Name = "CouchDB"
-	}
-
-	if err := s.store.PutProfile(profile); err != nil {
 		fail(w, err)
 		return
 	}
 
 	writeJSON(w, http.StatusOK, applyResponse{ProfileID: profile.ID, Steps: steps, Diagnosis: diag})
-}
-
-// profileView is a Profile without its sealed credential.
-type profileView struct {
-	ID            string    `json:"id"`
-	Name          string    `json:"name"`
-	AdminBaseURL  string    `json:"adminBaseUrl"`
-	PublicBaseURL string    `json:"publicBaseUrl"`
-	AdminUser     string    `json:"adminUser"`
-	Provisioned   bool      `json:"provisioned"`
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
-}
-
-func toProfileView(p store.Profile) profileView {
-	return profileView{
-		ID: p.ID, Name: p.Name,
-		AdminBaseURL: p.AdminBaseURL, PublicBaseURL: p.PublicBaseURL,
-		AdminUser: p.AdminUser, Provisioned: p.Provisioned,
-		CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
-	}
-}
-
-func (s *Server) handleListProfiles(w http.ResponseWriter, r *http.Request) {
-	profiles, err := s.store.Profiles()
-	if err != nil {
-		fail(w, err)
-		return
-	}
-	views := make([]profileView, 0, len(profiles))
-	for _, p := range profiles {
-		views = append(views, toProfileView(p))
-	}
-	writeJSON(w, http.StatusOK, views)
-}
-
-// clientFor builds an admin client for a stored profile.
-func (s *Server) clientFor(p store.Profile) (*couch.Client, error) {
-	password, err := s.sealer.OpenString(p.AdminPasswordSealed)
-	if err != nil {
-		return nil, fmt.Errorf("프로필 %q의 관리자 비밀번호를 열 수 없습니다: %w", p.Name, err)
-	}
-	return couch.New(p.AdminBaseURL, p.AdminUser, password)
 }
 
 // writeConnectError turns a CouchDB failure into something actionable, since

@@ -23,7 +23,8 @@ Open `https://<HUB_DOMAIN>` and follow the install wizard.
 
 `COUCHHUB_SECRET` seals credentials at rest. Without it CouchHub still runs, but
 vault credentials are shown once and never stored — Setup URIs cannot be
-reissued, and zones cannot be used at all.
+reissued, more CouchDB servers cannot be registered, and a vault cannot be moved
+between them.
 
 ## The two addresses
 
@@ -70,22 +71,47 @@ and the endpoints answer 403, so it is closed rather than hidden. Enabled by
 default.
 
 Rendered markdown is sanitised. Note content is not trusted input even when it
-is your own - a vault can receive documents from a zone peer, and script in a
-note would run inside the panel that holds every vault's credentials.
+is your own - a vault can be adopted from a database CouchHub did not create,
+and script in a note would run inside the panel that holds every vault's
+credentials.
 
-## Zones
+## CouchDB servers
 
-A zone connects two CouchHub instances. Each side exposes its vault registry on
-a token-protected endpoint; the other pulls it and writes documents into
-CouchDB's `_replicator`, so **CouchDB does the replicating** and a zone keeps
-running while CouchHub is restarted.
+CouchHub manages a list of them rather than a single one. Adding a server runs
+the same provisioning the install wizard does, so a registered server is always
+one a vault can actually be created on.
 
-Create a zone on one side, copy the token it shows once, and create the matching
-zone on the peer. Vaults are paired by database name — a vault that exists on
-only one side is reported as skipped rather than created silently.
+One server is the **primary**: it is where a vault lands when none is chosen,
+and where the database list comes from by default. Moving the flag is its own
+action — editing a server's address never changes it.
 
-The zone token hands out live vault credentials. Only expose the panel over
-HTTPS.
+A server holding vaults cannot be removed. Removing an empty one only forgets
+it; the CouchDB behind it is left alone, because CouchHub did not necessarily
+install it.
+
+## Moving a vault to another CouchDB
+
+The vault detail page's 관리 tab copies a vault's database to another
+registered server:
+
+1. CouchHub creates the database, the vault's account and its `_security`
+   document on the target.
+2. It writes a one-shot document into the target's `_replicator`. **CouchDB does
+   the copying** — the panel only polls the scheduler for progress.
+3. Nothing has moved yet. The vault still serves from the old server, so a copy
+   that stalls or fails costs only the target database.
+4. Finishing points the vault at the new server, and optionally removes the
+   original.
+
+Two things this deliberately does not do. It does not stop clients writing to
+the source, so notes saved after the copy started stay behind — stop syncing
+before the switch-over, or copy again. And it does not re-issue Setup URIs: when
+the two servers are published under different addresses, every device needs the
+new URI before it syncs again, which the panel says at switch-over time.
+
+The replication document lives on the target, so the **target CouchDB** has to
+be able to reach the source. CouchHub fills in the source's Obsidian-facing
+address for that, being the one that is routable from another host.
 
 ## Development
 
@@ -134,7 +160,6 @@ internal/
   provision/         the livesync configuration and the diff against a server
   setupuri/          Setup URI + QR encoding  ← cross-checked against upstream
   vault/             database, account and _security provisioning
-  zone/              peer registry exchange and _replicator planning
   metrics/           statistics poller
   store/             bbolt persistence
   secret/            credential sealing

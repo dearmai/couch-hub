@@ -22,12 +22,12 @@ import (
 
 // Bucket names. Kept as vars because bbolt wants []byte.
 var (
-	bucketMeta      = []byte("meta")
-	bucketProfiles  = []byte("profiles")
-	bucketVaults    = []byte("vaults")
-	bucketZones     = []byte("zones")
-	bucketSnapshots = []byte("snapshots") // nested: one sub-bucket per vault
-	bucketActivity  = []byte("activity")  // nested: one sub-bucket per vault
+	bucketMeta       = []byte("meta")
+	bucketProfiles   = []byte("profiles")
+	bucketVaults     = []byte("vaults")
+	bucketMigrations = []byte("migrations")
+	bucketSnapshots  = []byte("snapshots") // nested: one sub-bucket per vault
+	bucketActivity   = []byte("activity")  // nested: one sub-bucket per vault
 
 	keySalt          = []byte("secret_salt")
 	keySchemaVersion = []byte("schema_version")
@@ -65,7 +65,7 @@ func Open(path string) (*Store, error) {
 func (s *Store) init() error {
 	return s.db.Update(func(tx *bbolt.Tx) error {
 		for _, name := range [][]byte{
-			bucketMeta, bucketProfiles, bucketVaults, bucketZones, bucketSnapshots, bucketActivity,
+			bucketMeta, bucketProfiles, bucketVaults, bucketMigrations, bucketSnapshots, bucketActivity,
 		} {
 			if _, err := tx.CreateBucketIfNotExists(name); err != nil {
 				return fmt.Errorf("store: create bucket %s: %w", name, err)
@@ -177,6 +177,12 @@ func (s *Store) DeleteVault(id string) error {
 		if err := tx.Bucket(bucketVaults).Delete([]byte(id)); err != nil {
 			return err
 		}
+		// A move in flight for a vault that no longer exists has nothing left to
+		// finish, and leaving the record would make the next vault of the same
+		// id inherit it.
+		if err := tx.Bucket(bucketMigrations).Delete([]byte(id)); err != nil {
+			return err
+		}
 		for _, parent := range [][]byte{bucketSnapshots, bucketActivity} {
 			b := tx.Bucket(parent)
 			if b.Bucket([]byte(id)) == nil {
@@ -190,12 +196,13 @@ func (s *Store) DeleteVault(id string) error {
 	})
 }
 
-// --- zones -----------------------------------------------------------------
+// --- migrations ------------------------------------------------------------
 
-func (s *Store) PutZone(z Zone) error         { return put(s, bucketZones, z.ID, z) }
-func (s *Store) Zone(id string) (Zone, error) { return get[Zone](s, bucketZones, id) }
-func (s *Store) Zones() ([]Zone, error)       { return list[Zone](s, bucketZones) }
-func (s *Store) DeleteZone(id string) error   { return del(s, bucketZones, id) }
+func (s *Store) PutMigration(m Migration) error { return put(s, bucketMigrations, m.VaultID, m) }
+func (s *Store) Migration(vaultID string) (Migration, error) {
+	return get[Migration](s, bucketMigrations, vaultID)
+}
+func (s *Store) DeleteMigration(vaultID string) error { return del(s, bucketMigrations, vaultID) }
 
 // --- snapshots -------------------------------------------------------------
 

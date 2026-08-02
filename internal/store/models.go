@@ -24,6 +24,11 @@ type Profile struct {
 	// successfully at least once.
 	Provisioned bool `json:"provisioned"`
 
+	// Primary marks the server new vaults land on when none is named. Exactly
+	// one profile carries it; the store has no way to enforce that, so the
+	// handlers clear it on the others when it moves.
+	Primary bool `json:"primary"`
+
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
@@ -60,33 +65,29 @@ type Vault struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-// ZoneDirection describes which way vault data flows to a peer CouchHub.
-type ZoneDirection string
+// Migration is a vault being moved from one CouchDB server to another.
+//
+// The copy itself is done by CouchDB: CouchHub writes a one-shot document into
+// the target's _replicator and then only watches it. That is what lets the move
+// survive a CouchHub restart - the record here is enough to pick the job back up
+// and finish it.
+//
+// It is keyed by vault, so a vault has at most one move in flight.
+type Migration struct {
+	VaultID         string `json:"vaultId"`
+	SourceProfileID string `json:"sourceProfileId"`
+	TargetProfileID string `json:"targetProfileId"`
+	DBName          string `json:"dbName"`
 
-const (
-	ZonePush ZoneDirection = "push"
-	ZonePull ZoneDirection = "pull"
-	ZoneBoth ZoneDirection = "both"
-)
+	// ReplicationID names the document in the target's _replicator.
+	ReplicationID string `json:"replicationId"`
 
-// Zone is a replication relationship with another CouchHub.
-type Zone struct {
-	ID        string        `json:"id"`
-	Name      string        `json:"name"`
-	PeerURL   string        `json:"peerUrl"`
-	Direction ZoneDirection `json:"direction"`
+	// DeleteSource drops the original database once the copy has finished.
+	// Cleared by default: a copy that is verified afterwards is recoverable, a
+	// deleted database is not.
+	DeleteSource bool `json:"deleteSource"`
 
-	// TokenSealed authenticates against the peer's /api/zone/export endpoint.
-	TokenSealed []byte `json:"tokenSealed,omitempty"`
-
-	// VaultIDs limits the zone to specific vaults; empty means all of them.
-	VaultIDs []string `json:"vaultIds,omitempty"`
-
-	LastSyncAt    time.Time `json:"lastSyncAt,omitzero"`
-	LastSyncError string    `json:"lastSyncError,omitempty"`
-
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	StartedAt time.Time `json:"startedAt"`
 }
 
 // Snapshot is one poll of a vault's CouchDB statistics, from GET /{db}.

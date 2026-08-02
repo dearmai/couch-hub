@@ -5,9 +5,9 @@ import { Toaster } from "@/components/ui/sonner"
 
 import { AppShell } from "@/components/AppShell"
 import { statusQuery } from "@/lib/api"
+import CouchDBs from "@/routes/CouchDBs"
 import Settings from "@/routes/Settings"
 import Vaults from "@/routes/Vaults"
-import Zones from "@/routes/Zones"
 
 // Split the two heavy routes out of the initial bundle: the charts pull in
 // recharts and the wizard pulls in a markdown parser, and neither is needed to
@@ -58,7 +58,7 @@ export default function App() {
                   <Route index element={<Dashboard />} />
                   <Route path="vaults" element={<Vaults />} />
                   <Route path="vaults/:id" element={<VaultDetail />} />
-                  <Route path="zones" element={<Zones />} />
+                  <Route path="couchdbs" element={<CouchDBs />} />
                   <Route path="settings" element={<Settings />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>

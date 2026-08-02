@@ -55,24 +55,22 @@ func (s *Server) Handler() (http.Handler, error) {
 		r.Get("/health", s.handleHealth)
 		r.Get("/status", s.handleStatus)
 
-		r.Get("/profiles", s.handleListProfiles)
-
-		// Peer-facing: authenticated by a shared zone token, not by the session
-		// the rest of the API assumes.
-		r.Get("/zone/export", s.handleZoneExport)
-
-		r.Route("/zones", func(r chi.Router) {
-			r.Get("/", s.handleListZones)
-			r.Post("/", s.handleCreateZone)
-			r.Delete("/{id}", s.handleDeleteZone)
-			r.Post("/{id}/sync", s.handleSyncZone)
+		// The CouchDB servers CouchHub manages. One of them is the primary: it
+		// is where a vault lands when no server is named.
+		r.Route("/profiles", func(r chi.Router) {
+			r.Get("/", s.handleListProfiles)
+			r.Post("/", s.handleCreateProfile)
+			r.Put("/{id}", s.handleUpdateProfile)
+			r.Delete("/{id}", s.handleDeleteProfile)
+			r.Post("/{id}/primary", s.handleSetPrimaryProfile)
+			r.Post("/{id}/diagnose", s.handleDiagnoseProfile)
 		})
 
 		r.Get("/dashboard", s.handleDashboard)
 		r.Post("/metrics/refresh", s.handleRefreshMetrics)
 
-		// Existing databases on the server, for adopting one that predates
-		// CouchHub.
+		// Existing databases on one server, for adopting one that predates
+		// CouchHub. ?profileId= picks the server; without it, the primary.
 		r.Get("/couch/databases", s.handleListDatabases)
 
 		r.Route("/vaults", func(r chi.Router) {
@@ -82,6 +80,13 @@ func (s *Server) Handler() (http.Handler, error) {
 			r.Get("/{id}", s.handleGetVault)
 			r.Delete("/{id}", s.handleDeleteVault)
 			r.Post("/{id}/setup-uri", s.handleReissueSetupURI)
+			// Moving a vault to another CouchDB. The copy runs inside CouchDB,
+			// so starting it and finishing it are separate calls with the UI
+			// polling in between.
+			r.Post("/{id}/migrate", s.handleStartMigration)
+			r.Get("/{id}/migrate", s.handleMigrationStatus)
+			r.Post("/{id}/migrate/finish", s.handleFinishMigration)
+			r.Delete("/{id}/migrate", s.handleCancelMigration)
 			r.Get("/{id}/stats", s.handleVaultStats)
 			r.Get("/{id}/documents", s.handleListDocuments)
 			// The document id is a query parameter, not a path segment: livesync

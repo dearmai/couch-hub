@@ -1,12 +1,12 @@
 import { NavLink } from "react-router"
-import { Database, LayoutDashboard, Settings, Share2 } from "lucide-react"
+import { Database, LayoutDashboard, Server, Settings } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
 const NAV = [
   { to: "/", label: "대시보드", icon: LayoutDashboard, end: true },
   { to: "/vaults", label: "Vault", icon: Database, end: false },
-  { to: "/zones", label: "존 동기화", icon: Share2, end: false },
+  { to: "/couchdbs", label: "CouchDB", icon: Server, end: false },
   { to: "/settings", label: "설정", icon: Settings, end: false },
 ]
 
