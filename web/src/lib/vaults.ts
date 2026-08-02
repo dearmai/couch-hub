@@ -14,6 +14,13 @@ export interface Vault {
   adopted: boolean
   /** True for a vault whose contents are stored unencrypted. */
   e2eeDisabled: boolean
+  /**
+   * When the PIN currently on display stops working. The server replaces the
+   * PIN at this moment, so a countdown to it is a countdown to the code
+   * actually dying rather than to the page hiding it. Absent when no code is
+   * outstanding.
+   */
+  setupPinExpiresAt?: string
   createdAt: string
   updatedAt: string
 }
@@ -142,8 +149,8 @@ export const vaultsApi = {
   list: () => api.get<Vault[]>("/vaults"),
   get: (id: string) => api.get<Vault>(`/vaults/${id}`),
   create: (values: CreateVaultValues) => api.post<VaultWithCredentials>("/vaults", values),
-  reissue: (id: string, rotatePin: boolean) =>
-    api.post<VaultWithCredentials>(`/vaults/${id}/setup-uri`, { rotatePin }),
+  /** Mints a fresh PIN, which invalidates whatever was issued before it. */
+  reissue: (id: string) => api.post<VaultWithCredentials>(`/vaults/${id}/setup-uri`),
   /** Writes the stored CouchDB account back to the server. */
   repair: (id: string) => api.post<Vault>(`/vaults/${id}/repair`),
   remove: (id: string, confirm: string, keepData = false) =>

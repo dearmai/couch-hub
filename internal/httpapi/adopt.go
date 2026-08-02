@@ -210,6 +210,8 @@ func (s *Server) handleAdoptVault(w http.ResponseWriter, r *http.Request) {
 		record.CouchPasswordSealed = seal(creds.CouchPassword)
 		record.E2EEPassphraseSealed = seal(creds.E2EEPassphrase)
 		record.SetupPINSealed = seal(creds.SetupPIN)
+		// The PIN is on screen from this moment, so its clock starts here.
+		record.SetupPINExpiresAt = now.Add(SetupPINLifetime)
 		if sealErr != nil {
 			_ = vault.Detach(context.WithoutCancel(ctx), client, dbName, creds.CouchUser)
 			fail(w, sealErr)

@@ -47,22 +47,28 @@ a phone.
 
 ## Connecting a client
 
-Creating a vault issues two forms of the same settings. They are consumed
-differently, and the plugin accepts each in only one place:
+The vault page issues a code per device, in place rather than in a dialog: a QR
+encrypted under a six-digit PIN, with the PIN beside it. Scanning opens
+Obsidian, which asks for the PIN. Pasting works too — Obsidian's *Use the setup
+URI* command takes the same URI and asks for the PIN as its passphrase — which
+is the only path on a desktop, since the plugin has **no in-app camera**. Its
+"Scan QR Code" dialog only tells you to use the phone's camera app, which hands
+the `obsidian://` URL to Obsidian.
 
-| Form | How it is used |
-|---|---|
-| `?settingsQR=` (default) | Scan the QR with the phone camera, or click "이 컴퓨터의 Obsidian에서 열기". Nothing to type. |
-| `?settings=` | Paste into Obsidian's *Use the setup URI* dialog and enter the PIN as the passphrase. |
+Each issue mints a new PIN, and the server replaces it five minutes later
+whether or not the page is still open — expiry is enforced there because the
+code is decrypted by the client and never redeemed against this server.
 
-The plugin has **no in-app camera** — its "Scan QR Code" dialog only instructs
-you to use the phone's camera app, which hands the `obsidian://` URL to Obsidian.
-Both forms travel that same path.
+> What that buys is that the QR alone is worth nothing: it is ciphertext until
+> someone supplies the PIN. What it does not buy is revocation. The code carries
+> the CouchDB password and the end-to-end passphrase, so a screen photographed
+> **with** its PIN keeps working afterwards — the only answer to that is
+> changing the vault's credentials, which every device already syncing would
+> then need reissuing for.
 
-> The default QR carries the CouchDB password and the end-to-end passphrase in
-> the clear. That is exactly what removes the passphrase prompt. Anyone who
-> photographs it has the vault; use the PIN-protected form for anything that
-> leaves the room.
+The unencrypted `?settingsQR=` form — credentials in the clear, nothing to type
+— is one disclosure away under "PIN 없이 연결하기". It is the only way to
+configure a client you cannot hand a PIN to, and it cannot be expired at all.
 
 ## Browsing documents
 

@@ -46,6 +46,18 @@ type Vault struct {
 	E2EEPassphraseSealed []byte `json:"e2eePassphraseSealed,omitempty"`
 	SetupPINSealed       []byte `json:"setupPinSealed,omitempty"`
 
+	// SetupPINExpiresAt is when the current PIN stops being valid.
+	//
+	// The Setup URI is encrypted under the PIN and nothing phones home to
+	// redeem it, so the only way to expire a code that has been shown is to
+	// replace the PIN it was encrypted with. A background sweep does exactly
+	// that once this passes, which is what makes the displayed code
+	// short-lived even if the browser showing it is closed or killed.
+	//
+	// Zero means the PIN does not expire, which is every vault issued before
+	// this existed.
+	SetupPINExpiresAt time.Time `json:"setupPinExpiresAt,omitzero"`
+
 	// SecretsPersisted is false when the vault was created without
 	// COUCHHUB_SECRET set. Its credentials were shown once and are gone; the UI
 	// must not offer to reissue a Setup URI for it.

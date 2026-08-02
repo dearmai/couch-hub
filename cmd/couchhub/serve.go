@@ -56,6 +56,11 @@ func runServe(args []string) error {
 	// come up, and the panel has to answer while it does.
 	go api.Bootstrap(ctx)
 
+	// Replaces Setup PINs once their lifetime runs out. It has to happen here
+	// rather than in the browser that is counting down: the code is decrypted by
+	// the client, so it stops working only when the PIN behind it changes.
+	go api.ExpireSetupPINs(ctx)
+
 	srv := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           handler,

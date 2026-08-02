@@ -30,9 +30,13 @@ type vaultView struct {
 	// removal to detaching rather than dropping.
 	Adopted bool `json:"adopted"`
 	// E2EEDisabled marks a vault stored unencrypted.
-	E2EEDisabled bool      `json:"e2eeDisabled"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	E2EEDisabled bool `json:"e2eeDisabled"`
+	// SetupPINExpiresAt is when the PIN currently on display stops working. The
+	// UI counts down to it rather than to a deadline of its own, so what the
+	// page shows and what the server will enforce cannot drift apart.
+	SetupPINExpiresAt time.Time `json:"setupPinExpiresAt,omitzero"`
+	CreatedAt         time.Time `json:"createdAt"`
+	UpdatedAt         time.Time `json:"updatedAt"`
 }
 
 func toVaultView(v store.Vault) vaultView {
@@ -40,7 +44,8 @@ func toVaultView(v store.Vault) vaultView {
 		ID: v.ID, ProfileID: v.ProfileID, Name: v.Name, DBName: v.DBName,
 		CouchUser: v.CouchUser, SecretsPersisted: v.SecretsPersisted,
 		Adopted: v.Adopted, E2EEDisabled: v.E2EEDisabled,
-		CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt,
+		SetupPINExpiresAt: v.SetupPINExpiresAt,
+		CreatedAt:         v.CreatedAt, UpdatedAt: v.UpdatedAt,
 	}
 }
 
@@ -175,6 +180,8 @@ func (s *Server) handleCreateVault(w http.ResponseWriter, r *http.Request) {
 		record.CouchPasswordSealed = seal(creds.CouchPassword)
 		record.E2EEPassphraseSealed = seal(creds.E2EEPassphrase)
 		record.SetupPINSealed = seal(creds.SetupPIN)
+		// The PIN is on screen from this moment, so its clock starts here.
+		record.SetupPINExpiresAt = now.Add(SetupPINLifetime)
 		if sealErr != nil {
 			_ = vault.Teardown(context.WithoutCancel(ctx), client, dbName, creds.CouchUser)
 			fail(w, sealErr)
@@ -196,19 +203,13 @@ func (s *Server) handleCreateVault(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-type reissueRequest struct {
-	// RotatePIN mints a new Setup PIN. Previously issued QR codes stop working,
-	// which is the point when one has been shared by accident.
-	RotatePIN bool `json:"rotatePin"`
-}
-
+// handleReissueSetupURI hands out a one-time Setup URI.
+//
+// Every call mints a new PIN, which invalidates whatever was issued before it,
+// and stamps an expiry the sweep enforces. A code on a screen is therefore good
+// for one device and a few minutes, rather than being a standing key to the
+// vault for anyone who photographs it later.
 func (s *Server) handleReissueSetupURI(w http.ResponseWriter, r *http.Request) {
-	var req reissueRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", err)
-		return
-	}
-
 	v, err := s.store.Vault(chi.URLParam(r, "id"))
 	if err != nil {
 		fail(w, err)
@@ -238,30 +239,24 @@ func (s *Server) handleReissueSetupURI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if creds.SetupPIN, err = s.sealer.OpenString(v.SetupPINSealed); err != nil {
+	fresh, err := vault.NewCredentials(v.DBName)
+	if err != nil {
 		fail(w, err)
 		return
 	}
+	creds.SetupPIN = fresh.SetupPIN
 
-	if req.RotatePIN {
-		pin, err := vault.NewCredentials(v.DBName)
-		if err != nil {
-			fail(w, err)
-			return
-		}
-		creds.SetupPIN = pin.SetupPIN
-
-		sealed, err := s.sealer.SealString(creds.SetupPIN)
-		if err != nil {
-			fail(w, err)
-			return
-		}
-		v.SetupPINSealed = sealed
-		v.UpdatedAt = time.Now().UTC()
-		if err := s.store.PutVault(v); err != nil {
-			fail(w, err)
-			return
-		}
+	sealed, err := s.sealer.SealString(creds.SetupPIN)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	v.SetupPINSealed = sealed
+	v.SetupPINExpiresAt = time.Now().UTC().Add(SetupPINLifetime)
+	v.UpdatedAt = time.Now().UTC()
+	if err := s.store.PutVault(v); err != nil {
+		fail(w, err)
+		return
 	}
 
 	if err := creds.BuildSetupURI(profile.PublicBaseURL, v.DBName, v.E2EEDisabled); err != nil {

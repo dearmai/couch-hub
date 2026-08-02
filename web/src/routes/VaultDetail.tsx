@@ -6,7 +6,6 @@ import {
   ChartLine,
   CheckCircle2,
   FileText,
-  KeyRound,
   Loader2,
   QrCode,
   Settings2,
@@ -14,9 +13,9 @@ import {
   Wrench,
 } from "lucide-react"
 
+import { ClientSetupPanel } from "@/components/ClientSetupPanel"
 import { MigrateVaultCard } from "@/components/MigrateVaultCard"
 import { PageHeader } from "@/components/PageHeader"
-import { SetupCredentials } from "@/components/SetupCredentials"
 import { VaultDocuments } from "@/components/VaultDocuments"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -39,7 +38,7 @@ import { ActivityHeatmap } from "@/components/viz/ActivityHeatmap"
 import { TrendChart } from "@/components/viz/TrendChart"
 import { ApiError, statusQuery } from "@/lib/api"
 import { formatBytes, formatCount, formatDate, statsApi } from "@/lib/stats"
-import { vaultsApi, type VaultWithCredentials } from "@/lib/vaults"
+import { vaultsApi } from "@/lib/vaults"
 
 const TABS = ["stats", "documents", "clients", "manage"] as const
 type Tab = (typeof TABS)[number]
@@ -61,7 +60,6 @@ export default function VaultDetail() {
   // browser is switched off.
   if (tab === "documents" && !documentsEnabled) tab = "stats"
 
-  const [issued, setIssued] = useState<VaultWithCredentials | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [confirmName, setConfirmName] = useState("")
   // Adopted databases predate CouchHub, so forgetting one defaults to leaving
@@ -79,11 +77,6 @@ export default function VaultDetail() {
     refetchInterval: 60_000,
   })
   const snapshots = stats?.snapshots ?? []
-
-  const reissue = useMutation({
-    mutationFn: (rotatePin: boolean) => vaultsApi.reissue(id, rotatePin),
-    onSuccess: (data) => setIssued(data),
-  })
 
   const repair = useMutation({
     mutationFn: () => vaultsApi.repair(id),
@@ -211,41 +204,12 @@ export default function VaultDetail() {
                 클라이언트 연결
               </CardTitle>
               <CardDescription>
-                새 기기를 추가할 때 Setup URI를 다시 발급합니다. PIN을 새로 만들면 이전에 배포한 QR은 더 이상 열리지
-                않습니다.
+                기기 하나를 붙일 때마다 코드를 발급합니다. QR만으로는 열리지 않고 PIN 6자리가 함께 필요하며, 5분이
+                지나면 서버가 PIN을 교체해 다음 발급부터는 다른 번호를 씁니다.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {!vault.secretsPersisted ? (
-                <Alert variant="destructive">
-                  <AlertTriangle aria-hidden />
-                  <AlertTitle>재발급할 수 없습니다</AlertTitle>
-                  <AlertDescription>
-                    이 Vault는 COUCHHUB_SECRET 없이 생성되어 자격증명이 저장되지 않았습니다. 다른 기기를 추가하려면
-                    Vault를 다시 만들어야 합니다.
-                  </AlertDescription>
-                </Alert>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  <Button onClick={() => reissue.mutate(false)} disabled={reissue.isPending}>
-                    {reissue.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <QrCode aria-hidden />}
-                    Setup URI 보기
-                  </Button>
-                  <Button variant="outline" onClick={() => reissue.mutate(true)} disabled={reissue.isPending}>
-                    <KeyRound aria-hidden /> PIN 새로 발급
-                  </Button>
-                </div>
-              )}
-
-              {reissue.isError ? (
-                <Alert variant="destructive">
-                  <AlertTriangle aria-hidden />
-                  <AlertTitle>실패</AlertTitle>
-                  <AlertDescription>
-                    {reissue.error instanceof ApiError ? reissue.error.message : String(reissue.error)}
-                  </AlertDescription>
-                </Alert>
-              ) : null}
+            <CardContent>
+              <ClientSetupPanel vault={vault} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -318,19 +282,6 @@ export default function VaultDetail() {
           </Card>
         </TabsContent>
       </Tabs>
-
-      <Dialog open={issued !== null} onOpenChange={(open) => !open && setIssued(null)}>
-        <DialogContent className="max-h-[90svh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{vault.name} Setup URI</DialogTitle>
-            <DialogDescription>Obsidian에서 불러오면 이 기기가 동기화에 참여합니다.</DialogDescription>
-          </DialogHeader>
-          {issued ? <SetupCredentials credentials={issued.credentials} persisted /> : null}
-          <DialogFooter>
-            <Button onClick={() => setIssued(null)}>닫기</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog
         open={deleteOpen}

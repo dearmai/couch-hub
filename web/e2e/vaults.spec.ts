@@ -52,6 +52,16 @@ async function expectPinSectionVisible(page: Page) {
   await expect(page.getByLabel("Setup PIN", { exact: true })).toBeVisible()
 }
 
+/**
+ * Opens the section holding the credentials in the clear. It is behind a
+ * disclosure because the encrypted code is what the panel offers by default.
+ */
+async function openPlainSection(page: Page) {
+  const summary = page.getByText(/PIN 없이 연결하기/)
+  await summary.click()
+  await expect(page.getByRole("textbox", { name: "Setup URI (평문)", exact: true })).toBeVisible()
+}
+
 /** Decrypts a Setup URI with the same binary the server issued it from. */
 function parseSetupURI(uri: string, pin: string): Record<string, unknown> {
   const out = execFileSync("../bin/couchhub", ["parse-setup-uri"], {
@@ -98,6 +108,7 @@ test("creates a vault and issues a working Setup URI", async ({ page, request })
   await expect(page.getByText(`${VAULT_NAME} 준비 완료`)).toBeVisible()
   await expect(page.getByRole("img", { name: "Setup URI QR code" })).toBeVisible()
 
+  await openPlainSection(page)
   const couchPassword = await readField(page, "CouchDB 비밀번호")
   const passphrase = await readField(page, "E2EE 패스프레이즈")
 
@@ -106,10 +117,10 @@ test("creates a vault and issues a working Setup URI", async ({ page, request })
   const { dbName } = await currentVault(request)
   expect(dbName).toMatch(/^[a-z][a-z0-9_$()+/-]*$/)
 
-  // The primary QR is livesync's `?settingsQR=` form: unencrypted on purpose, so
-  // a single scan configures the client with nothing to type. That means the
+  // The disclosed QR is livesync's `?settingsQR=` form: unencrypted on purpose,
+  // so a single scan configures the client with nothing to type. That means the
   // passphrase really is in there - assert it rather than assuming.
-  const plainUri = await readField(page, "Setup URI")
+  const plainUri = await readField(page, "Setup URI (평문)")
   expect(plainUri.startsWith("obsidian://setuplivesync?settingsQR=")).toBeTruthy()
   // The plugin's "Enter Setup URI" dialog accepts a URI only when it starts with
   // "obsidian://setuplivesync?settings=", then decrypts it. The plain form is
@@ -121,7 +132,7 @@ test("creates a vault and issues a working Setup URI", async ({ page, request })
   expect(plainUri).toContain(passphrase)
   expect(plainUri).toContain(dbName)
 
-  // The PIN-protected alternative must behave the opposite way.
+  // The code the panel offers by default must behave the opposite way.
   await expectPinSectionVisible(page)
   const pin = (await page.getByLabel("Setup PIN", { exact: true }).innerText()).trim()
   expect(pin).toMatch(/^\d{6}$/)
@@ -162,7 +173,7 @@ test("provisions the database, the account and its security document", async ({ 
 
 test("the vault account reaches its own database and nothing else", async ({ request }) => {
   const v = await currentVault(request)
-  const issued = await request.post(`/api/vaults/${v.id}/setup-uri`, { data: { rotatePin: false } })
+  const issued = await request.post(`/api/vaults/${v.id}/setup-uri`)
   const { credentials } = await issued.json()
   const header =
     "Basic " + Buffer.from(`${credentials.couchUser}:${credentials.couchPassword}`).toString("base64")
@@ -177,32 +188,42 @@ test("the vault account reaches its own database and nothing else", async ({ req
   expect([401, 403]).toContain(others.status)
 })
 
-test("rotating the PIN issues a URI the old PIN cannot open", async ({ page, request }) => {
-  const { dbName } = await currentVault(request)
+test("each issue mints its own PIN, in place on the page", async ({ page, request }) => {
+  const { id, dbName } = await currentVault(request)
 
   await page.goto("/vaults")
   await page.getByRole("link", { name: new RegExp(VAULT_NAME) }).click()
-
   await page.getByRole("tab", { name: /연결/ }).click()
-  await page.getByRole("button", { name: "Setup URI 보기", exact: true }).click()
+
+  // No dialog: the code renders on the page it was asked for.
+  await page.getByRole("button", { name: /코드 발급/ }).click()
   await expectPinSectionVisible(page)
   const firstPin = (await page.getByLabel("Setup PIN", { exact: true }).innerText()).trim()
   const firstUri = await readField(page, "Setup URI (PIN 보호)")
-  await page.getByRole("button", { name: "닫기" }).click()
+  expect(firstPin).toMatch(/^\d{6}$/)
+  await expect(page.getByLabel("남은 시간")).toContainText(/^[0-4]:\d\d 뒤 만료$/)
 
-  await page.getByRole("button", { name: /PIN 새로 발급/ }).click()
-  await expectPinSectionVisible(page)
+  await page.getByRole("button", { name: /새 코드 발급/ }).click()
+  await expect
+    .poll(async () => (await page.getByLabel("Setup PIN", { exact: true }).innerText()).trim())
+    .not.toBe(firstPin)
+
   const secondPin = (await page.getByLabel("Setup PIN", { exact: true }).innerText()).trim()
   const secondUri = await readField(page, "Setup URI (PIN 보호)")
 
-  expect(secondPin).not.toBe(firstPin)
   expect(parseSetupURI(secondUri, secondPin).couchDB_DBNAME).toBe(dbName)
   expect(() => parseSetupURI(secondUri, firstPin)).toThrow()
 
-  // The previously issued URI is a separate blob and still opens with its own
-  // PIN - rotating protects newly issued codes, it does not revoke old ones.
-  // Anyone holding both the old QR and the old PIN keeps access until the
-  // vault's CouchDB password changes.
+  // The vault carries the deadline the page counts down to, so the two cannot
+  // disagree about when the PIN is replaced.
+  const vault = await (await request.get(`/api/vaults/${id}`)).json()
+  const remaining = new Date(vault.setupPinExpiresAt).getTime() - Date.now()
+  expect(remaining).toBeGreaterThan(0)
+  expect(remaining).toBeLessThanOrEqual(5 * 60 * 1000)
+
+  // A previously issued URI is a separate blob and still opens with its own PIN:
+  // minting a new one protects the next code, it does not revoke a code someone
+  // already photographed alongside its PIN.
   expect(parseSetupURI(firstUri, firstPin).couchDB_DBNAME).toBe(dbName)
 })
 
@@ -324,7 +345,7 @@ test.describe("adopting an existing database", () => {
     const adopted = vaults.find((v: { dbName: string }) => v.dbName === ADOPT_DB)
     expect(adopted.adopted).toBe(true)
 
-    const issued = await request.post(`/api/vaults/${adopted.id}/setup-uri`, { data: { rotatePin: false } })
+    const issued = await request.post(`/api/vaults/${adopted.id}/setup-uri`)
     const { credentials } = await issued.json()
     expect(credentials.e2eePassphrase).toBe("the-original-passphrase")
   })
