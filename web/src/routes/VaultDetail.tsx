@@ -1,7 +1,18 @@
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate, useParams, useSearchParams } from "react-router"
-import { AlertTriangle, ChartLine, FileText, KeyRound, Loader2, QrCode, Settings2, Trash2 } from "lucide-react"
+import {
+  AlertTriangle,
+  ChartLine,
+  CheckCircle2,
+  FileText,
+  KeyRound,
+  Loader2,
+  QrCode,
+  Settings2,
+  Trash2,
+  Wrench,
+} from "lucide-react"
 
 import { MigrateVaultCard } from "@/components/MigrateVaultCard"
 import { PageHeader } from "@/components/PageHeader"
@@ -72,6 +83,11 @@ export default function VaultDetail() {
   const reissue = useMutation({
     mutationFn: (rotatePin: boolean) => vaultsApi.reissue(id, rotatePin),
     onSuccess: (data) => setIssued(data),
+  })
+
+  const repair = useMutation({
+    mutationFn: () => vaultsApi.repair(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["vaults", id] }),
   })
 
   const remove = useMutation({
@@ -235,6 +251,44 @@ export default function VaultDetail() {
         </TabsContent>
 
         <TabsContent value="manage" className="space-y-4 pt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle role="heading" aria-level={2}>
+                CouchDB 계정 복구
+              </CardTitle>
+              <CardDescription>
+                저장된 자격증명을 CouchDB에 다시 적용합니다. 계정 <span className="font-mono">{vault.couchUser}</span>이
+                있는데도 클라이언트나 복제가 인증에 실패할 때 쓰세요. 데이터베이스는 만들지도, 비우지도 않습니다.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button variant="outline" onClick={() => repair.mutate()} disabled={repair.isPending}>
+                {repair.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Wrench aria-hidden />}
+                계정 복구
+              </Button>
+
+              {repair.isSuccess ? (
+                <Alert>
+                  <CheckCircle2 aria-hidden />
+                  <AlertTitle>적용했습니다</AlertTitle>
+                  <AlertDescription>
+                    계정 비밀번호와 데이터베이스 권한을 저장된 값으로 다시 맞췄습니다.
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+
+              {repair.isError ? (
+                <Alert variant="destructive">
+                  <AlertTriangle aria-hidden />
+                  <AlertTitle>복구 실패</AlertTitle>
+                  <AlertDescription>
+                    {repair.error instanceof ApiError ? repair.error.message : String(repair.error)}
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+            </CardContent>
+          </Card>
+
           <MigrateVaultCard vault={vault} />
 
           <Card>

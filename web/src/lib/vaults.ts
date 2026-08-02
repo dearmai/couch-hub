@@ -144,6 +144,8 @@ export const vaultsApi = {
   create: (values: CreateVaultValues) => api.post<VaultWithCredentials>("/vaults", values),
   reissue: (id: string, rotatePin: boolean) =>
     api.post<VaultWithCredentials>(`/vaults/${id}/setup-uri`, { rotatePin }),
+  /** Writes the stored CouchDB account back to the server. */
+  repair: (id: string) => api.post<Vault>(`/vaults/${id}/repair`),
   remove: (id: string, confirm: string, keepData = false) =>
     api.delete<void>(
       `/vaults/${id}?confirm=${encodeURIComponent(confirm)}${keepData ? "&keepData=true" : ""}`,

@@ -346,9 +346,20 @@ func (c *Client) Security(ctx context.Context, db string) (Security, error) {
 
 const userDocPrefix = "org.couchdb.user:"
 
-// CreateUser adds a non-admin account to _users.
+// CreateUser adds a non-admin account to _users, or resets the password of one
+// that is already there.
 //
-// CouchDB hashes the password itself when the document contains a plain
+// The reset is the point. An account left behind by an earlier vault - a
+// database adopted twice, a teardown that half finished - makes a plain PUT
+// answer 409, and treating that as success stores a password that authenticates
+// nowhere. Nothing reports it until a client or a replication tries to log in
+// and gets "Name or password is incorrect" against an account that plainly
+// exists.
+//
+// Names are CouchHub's own (vault_<database>), so an existing document under
+// one is a leftover to reclaim rather than someone else's account.
+//
+// CouchDB hashes the password itself when the document carries a plain
 // `password` field, so it is never stored in the clear.
 func (c *Client) CreateUser(ctx context.Context, name, password string, roles []string) error {
 	if roles == nil {
@@ -362,6 +373,16 @@ func (c *Client) CreateUser(ctx context.Context, name, password string, roles []
 		"password": password,
 	}
 	path := "/_users/" + url.PathEscape(userDocPrefix+name)
+
+	var existing struct {
+		Rev string `json:"_rev"`
+	}
+	if err := c.do(ctx, http.MethodGet, path, nil, &existing); err == nil {
+		doc["_rev"] = existing.Rev
+	} else if !IsNotFound(err) {
+		return err
+	}
+
 	return c.do(ctx, http.MethodPut, path, doc, nil)
 }
 

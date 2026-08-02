@@ -80,6 +80,9 @@ func (s *Server) Handler() (http.Handler, error) {
 			r.Get("/{id}", s.handleGetVault)
 			r.Delete("/{id}", s.handleDeleteVault)
 			r.Post("/{id}/setup-uri", s.handleReissueSetupURI)
+			// Writes the stored CouchDB account back, for a vault whose
+			// credentials were never applied to the server.
+			r.Post("/{id}/repair", s.handleRepairVaultAccount)
 			// Moving a vault to another CouchDB. The copy runs inside CouchDB,
 			// so starting it and finishing it are separate calls with the UI
 			// polling in between.

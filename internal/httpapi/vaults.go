@@ -276,6 +276,65 @@ func (s *Server) handleReissueSetupURI(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleRepairVaultAccount re-applies a vault's stored credentials to CouchDB.
+//
+// It exists for vaults registered while an account of the same name was already
+// present: CouchDB answered the account creation with a conflict, the password
+// CouchHub had just generated was never applied, and what it stored
+// authenticates nowhere. Clients report that as a login failure and replication
+// as replication_auth_error, both against an account that plainly exists.
+//
+// Writing the stored password back is the whole repair, and it is safe to run
+// on a healthy vault: the same credentials are simply set again.
+func (s *Server) handleRepairVaultAccount(w http.ResponseWriter, r *http.Request) {
+	v, err := s.store.Vault(chi.URLParam(r, "id"))
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if !v.SecretsPersisted {
+		writeError(w, http.StatusPreconditionFailed, "secrets_not_persisted",
+			errors.New("이 Vault는 자격증명이 저장되지 않아 복구할 수 없습니다. Vault를 다시 만들어야 합니다"))
+		return
+	}
+
+	password, err := s.sealer.OpenString(v.CouchPasswordSealed)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	profile, err := s.store.Profile(v.ProfileID)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	client, err := s.clientFor(profile)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+
+	// Adopt is the repair: it never creates or empties the database, and it
+	// merges into the existing _security document rather than replacing it.
+	if err := vault.Adopt(ctx, client, v.DBName, vault.Credentials{
+		CouchUser:     v.CouchUser,
+		CouchPassword: password,
+	}); err != nil {
+		writeError(w, http.StatusBadGateway, "repair_failed", err)
+		return
+	}
+
+	v.UpdatedAt = time.Now().UTC()
+	if err := s.store.PutVault(v); err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toVaultView(v))
+}
+
 func (s *Server) handleDeleteVault(w http.ResponseWriter, r *http.Request) {
 	v, err := s.store.Vault(chi.URLParam(r, "id"))
 	if err != nil {
