@@ -105,6 +105,11 @@ type Credentials struct {
 	// QRSVG is empty when the URI does not fit in a QR code; the UI then offers
 	// the URI as copyable text only.
 	QRSVG string `json:"qrSvg"`
+	// QRModules is the code's width in modules, quiet zone included. The UI
+	// sizes itself from it: the same pixel width is a different physical module
+	// size for every URI length, and a camera stops resolving modules well
+	// before the code stops fitting on screen.
+	QRModules int `json:"qrModules"`
 	// QRError explains an empty QRSVG.
 	QRError string `json:"qrError,omitempty"`
 
@@ -112,9 +117,10 @@ type Credentials struct {
 	// password and the E2EE passphrase in the clear, which is precisely what
 	// removes the PIN prompt - and what makes a photographed code enough to take
 	// over the vault.
-	PlainSetupURI string `json:"plainSetupUri"`
-	PlainQRSVG    string `json:"plainQrSvg"`
-	PlainQRError  string `json:"plainQrError,omitempty"`
+	PlainSetupURI  string `json:"plainSetupUri"`
+	PlainQRSVG     string `json:"plainQrSvg"`
+	PlainQRModules int    `json:"plainQrModules"`
+	PlainQRError   string `json:"plainQrError,omitempty"`
 }
 
 // NewCredentials mints the secrets for a vault without touching CouchDB.
@@ -156,26 +162,30 @@ func (c *Credentials) BuildSetupURI(publicBaseURL, dbName string, e2eeDisabled b
 		return err
 	}
 	c.SetupURI = uri
-	c.QRSVG, c.QRError = renderQR(uri)
+	c.QRSVG, c.QRModules, c.QRError = renderQR(uri)
 
 	plain, err := setupuri.BuildQR(cfg)
 	if err != nil {
 		return err
 	}
 	c.PlainSetupURI = plain
-	c.PlainQRSVG, c.PlainQRError = renderQR(plain)
+	c.PlainQRSVG, c.PlainQRModules, c.PlainQRError = renderQR(plain)
 
 	return nil
 }
 
-// renderQR returns the SVG, or an empty string and a reason. A URI too long for
-// a QR is not fatal - it can still be copied as text.
-func renderQR(uri string) (svg string, failure string) {
-	out, err := setupuri.QRSVG(uri, 4)
+// renderQR returns the SVG and its module count, or an empty string and a
+// reason. A URI too long for a QR is not fatal - it can still be copied as text.
+func renderQR(uri string) (svg string, modules int, failure string) {
+	out, err := setupuri.QRSVG(uri, 8)
 	if err != nil {
-		return "", err.Error()
+		return "", 0, err.Error()
 	}
-	return out, ""
+	modules, err = setupuri.QRModules(uri)
+	if err != nil {
+		return "", 0, err.Error()
+	}
+	return out, modules, ""
 }
 
 // Provision creates the database, the dedicated account, and the security

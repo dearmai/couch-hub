@@ -35,6 +35,8 @@ export interface Credentials {
   setupUri: string
   /** Empty when the URI exceeds QR capacity; qrError then explains why. */
   qrSvg: string
+  /** Width of the code in modules, quiet zone included. The UI sizes from it. */
+  qrModules: number
   qrError?: string
 
   /**
@@ -44,6 +46,7 @@ export interface Credentials {
    */
   plainSetupUri: string
   plainQrSvg: string
+  plainQrModules: number
   plainQrError?: string
 }
 

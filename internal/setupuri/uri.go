@@ -78,15 +78,32 @@ var ErrQRTooLarge = fmt.Errorf("setupuri: setup URI does not fit in a QR code")
 // us to an index mapping that shifts whenever the plugin gains a setting.
 func QRSVG(uri string, moduleSize int) (string, error) {
 	if moduleSize <= 0 {
-		moduleSize = 4
+		moduleSize = 8
 	}
-	// Medium recovery still leaves headroom at realistic URI lengths and
-	// tolerates a scuffed screen or a bad camera angle better than Low.
-	qr, err := qrcode.New(uri, qrcode.Medium)
+	// Low recovery, not Medium. A ~1.4 KB URI needs version 31 at Medium and
+	// version 26 at Low - 141 modules a side against 121 - and every module the
+	// code sheds is one fewer to fit on the screen. Recovery buys tolerance for
+	// print damage and dirt, which a code that exists for a few minutes on a
+	// monitor does not accumulate; module size is what a phone camera actually
+	// struggles with here.
+	qr, err := qrcode.New(uri, qrcode.Low)
 	if err != nil {
 		return "", fmt.Errorf("%w: %d bytes", ErrQRTooLarge, len(uri))
 	}
 	return bitmapToSVG(qr.Bitmap(), moduleSize), nil
+}
+
+// QRModules reports the width of the code in modules, quiet zone included.
+//
+// The UI sizes itself from this: a fixed pixel width is a different physical
+// module size for every URI length, and below roughly two device pixels per
+// module a phone camera stops resolving them.
+func QRModules(uri string) (int, error) {
+	qr, err := qrcode.New(uri, qrcode.Low)
+	if err != nil {
+		return 0, fmt.Errorf("%w: %d bytes", ErrQRTooLarge, len(uri))
+	}
+	return len(qr.Bitmap()), nil
 }
 
 // bitmapToSVG emits one <rect> per dark module. Runs of adjacent dark modules

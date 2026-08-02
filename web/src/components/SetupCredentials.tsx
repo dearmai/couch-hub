@@ -1,6 +1,7 @@
 import { AlertTriangle, ExternalLink, Monitor, ShieldAlert, Smartphone } from "lucide-react"
 
 import { CopyField } from "@/components/CopyField"
+import { QRCode } from "@/components/QRCode"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { buttonVariants } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -42,18 +43,14 @@ export function SetupCredentials({
         </Alert>
       ) : null}
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(260px,300px)_1fr] lg:items-start">
+      <div className="grid gap-5 lg:grid-cols-[minmax(300px,440px)_1fr] lg:items-start">
         {credentials.qrSvg ? (
           <div className="flex flex-col items-center gap-3">
-            {/* The SVG comes from our own server, generated from the URI we just
-                requested - not from user input.
-
-                [&_svg] overrides the intrinsic width/height the generator emits:
-                a dense QR is nearly 600px square and would otherwise push the
-                page into horizontal scrolling on a phone. */}
-            <div
-              className="w-full max-w-[280px] rounded-lg border bg-white p-3 [&_svg]:block [&_svg]:h-auto [&_svg]:w-full"
-              dangerouslySetInnerHTML={{ __html: credentials.qrSvg }}
+            <QRCode
+              svg={credentials.qrSvg}
+              modules={credentials.qrModules}
+              label="Setup URI QR"
+              hint={credentials.setupPin}
             />
             {/* Same protocol handler the camera triggers, for when Obsidian runs
                 on this machine and there is no camera involved. An anchor rather
@@ -134,9 +131,11 @@ export function SetupCredentials({
 
           {credentials.plainQrSvg ? (
             <div className="flex flex-col items-center gap-3">
-              <div
-                className="w-full max-w-[240px] rounded-lg border bg-white p-3 [&_svg]:block [&_svg]:h-auto [&_svg]:w-full"
-                dangerouslySetInnerHTML={{ __html: credentials.plainQrSvg }}
+              <QRCode
+                svg={credentials.plainQrSvg}
+                modules={credentials.plainQrModules}
+                label="PIN 없는 Setup URI QR"
+                maxWidth={320}
               />
               <a
                 href={credentials.plainSetupUri}
