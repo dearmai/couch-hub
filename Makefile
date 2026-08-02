@@ -141,6 +141,21 @@ remote-check:
 		echo "$(REMOTE_DIR)/.env 가 없습니다. 'make remote-env' 로 로컬 .env를 올리거나 원격에서 직접 만드세요"; exit 1; }
 	@echo "ok"
 
+## remote-env-init: create a local .env from the example, with the secrets generated
+# Never overwrites: COUCHHUB_SECRET is what every stored credential is sealed
+# with, so replacing one already in use costs every vault a reissue.
+remote-env-init:
+	@test ! -f .env || { echo ".env가 이미 있습니다. 다시 만들려면 먼저 옮기거나 지우세요 (기존 COUCHHUB_SECRET을 잃으면 모든 Vault를 재발급해야 합니다)"; exit 1; }
+	@umask 077; \
+	pw=$$(openssl rand -hex 24); \
+	secret=$$(openssl rand -base64 32); \
+	sed -e "s|^COUCHDB_PASSWORD=.*|COUCHDB_PASSWORD=$$pw|" \
+	    -e "s|^COUCHHUB_SECRET=.*|COUCHHUB_SECRET=$$secret|" .env.example > .env
+	@chmod 600 .env
+	@echo ".env 생성됨 (0600). 시크릿 2개는 채워졌습니다."
+	@echo "직접 채울 것: SYNC_DOMAIN, HUB_DOMAIN"
+	@echo "다음: 수정 후 'make remote-env' 로 업로드, 'make remote-deploy' 로 배포"
+
 ## remote-env: upload the local .env to the remote (0600, never synced otherwise)
 # Secrets move only when asked for explicitly: remote-deploy leaves the remote
 # .env alone, so a deploy can never overwrite the running configuration.
@@ -216,5 +231,5 @@ clean:
 	find internal/httpapi/webdist -mindepth 1 ! -name .gitkeep -delete
 
 .PHONY: help web embed build build-go image test vet gen-template verify-uri verify-livesync e2e check \
-	remote-check remote-env remote-sync remote-deploy remote-restart remote-ps remote-logs remote-down remote-boot \
+	remote-check remote-env-init remote-env remote-sync remote-deploy remote-restart remote-ps remote-logs remote-down remote-boot \
 	dev-server dev-down dev-ps dev-reset clean

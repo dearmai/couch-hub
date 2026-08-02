@@ -126,16 +126,22 @@ matches the architecture that runs it, which a build on an arm64 laptop for an
 amd64 server would not, and nothing has to be published to a registry.
 
 ```sh
-cp .env.example .env    # fill in the secrets
+make remote-env-init    # .env from the example, both secrets generated
+$EDITOR .env            # SYNC_DOMAIN and HUB_DOMAIN are yours to fill in
 make remote-env         # upload it once - 0600, and never synced afterwards
 make remote-deploy
 ```
+
+`remote-env-init` refuses to overwrite an existing `.env`. `COUCHHUB_SECRET` is
+what every stored credential is sealed with, so replacing one already in use
+costs every vault a reissue.
 
 After that, `make remote-deploy` on its own. `.env` stays out of every sync, so
 the remote keeps the configuration it is running with.
 
 | Target | What it does |
 |---|---|
+| `remote-env-init` | write a local `.env` with generated secrets, never overwriting |
 | `remote-check` | ssh, podman, compose provider and `.env`, without changing anything |
 | `remote-deploy` | sync, build on the remote, start or restart |
 | `remote-restart` | restart the containers without rebuilding |
