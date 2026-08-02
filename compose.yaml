@@ -15,9 +15,16 @@ services:
     volumes:
       - couchdb-data:/opt/couchdb/data
       - couchdb-etc:/opt/couchdb/etc/local.d
-    # Deliberately not published to the host: Caddy is the only way in.
-    expose:
-      - "5984"
+    # Published so something outside the compose network - a Cloudflare tunnel
+    # running on the host, say - can reach CouchDB without going through Caddy.
+    # Bind to 127.0.0.1 by setting COUCHDB_BIND=127.0.0.1 when the port only has
+    # to be reachable from the host itself; the default accepts LAN clients too.
+    #
+    # The port is protected by CouchDB's own admin account either way: the image
+    # disables admin party as soon as COUCHDB_PASSWORD is set, and CouchHub's
+    # provisioning then requires a valid user for everything except /_up.
+    ports:
+      - "${COUCHDB_BIND:-0.0.0.0}:${COUCHDB_PORT:-10021}:5984"
     healthcheck:
       # /_up stays reachable without credentials because CouchHub provisions
       # require_valid_user_except_for_up; without it this check would get 401 on

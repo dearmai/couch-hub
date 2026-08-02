@@ -155,6 +155,27 @@ the remote keeps the configuration it is running with.
 | `REMOTE_DIR` | `/apps/couch-hub` |
 | `REMOTE_COMPOSE` | `podman compose` |
 
+Ports on the deployed host:
+
+| Service | Host | Container |
+|---|---|---|
+| CouchDB | `${COUCHDB_PORT:-10021}` | 5984 |
+| CouchHub | not published | 10020 |
+| Caddy | 80, 443 | 80, 443 |
+
+CouchDB is published so something outside the compose network can reach it
+without going through Caddy — a Cloudflare tunnel running on the host, for
+instance. It is protected by its own admin account: the image disables admin
+party once `COUCHDB_PASSWORD` is set, and CouchHub's provisioning then requires
+a valid user for everything but `/_up`. `COUCHDB_BIND=127.0.0.1` narrows it to
+the host when the LAN has no business reaching it.
+
+The panel stays inside the network. Uncomment the `ports` block on the
+`couchhub` service to publish it the same way.
+
+Note that 10021 is also the Vite dev server's port, so a host running
+`make dev-server` and the deployed stack at once needs one of them moved.
+
 The remote needs ssh key authentication, `podman` with a compose provider, and
 `tar`. The tree travels as a tar stream rather than over rsync, which a minimal
 server install does not necessarily have. Source directories are replaced
