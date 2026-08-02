@@ -1,0 +1,17 @@
+# Build context hygiene: these are large, host-specific, or regenerated in the
+# build itself.
+.git
+.air
+bin
+data
+node_modules
+web/node_modules
+web/dist
+web/.e2e-data
+web/test-results
+web/playwright-report
+scripts/node_modules
+tools
+
+# The committed placeholder is replaced by the real build inside the image.
+internal/httpapi/webdist/assets

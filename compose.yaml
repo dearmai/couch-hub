@@ -1,0 +1,74 @@
+# Homelab deployment. Works with `podman compose up -d` and `docker compose up -d`.
+#
+# Copy .env.example to .env and fill in the secrets before starting.
+
+services:
+  couchdb:
+    image: docker.io/library/couchdb:3.5
+    restart: unless-stopped
+    # The image's own uid/gid. A mismatch here shows up as CouchDB dying during
+    # startup on a permission error.
+    user: "5984:5984"
+    environment:
+      COUCHDB_USER: ${COUCHDB_USER:?set COUCHDB_USER in .env}
+      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:?set COUCHDB_PASSWORD in .env}
+    volumes:
+      - couchdb-data:/opt/couchdb/data
+      - couchdb-etc:/opt/couchdb/etc/local.d
+    # Deliberately not published to the host: Caddy is the only way in.
+    expose:
+      - "5984"
+    healthcheck:
+      # /_up stays reachable without credentials because CouchHub provisions
+      # require_valid_user_except_for_up; without it this check would get 401 on
+      # a perfectly healthy server.
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:5984/_up"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  couchhub:
+    image: ${COUCHHUB_IMAGE:-ghcr.io/dearmai/couchhub:latest}
+    restart: unless-stopped
+    depends_on:
+      couchdb:
+        condition: service_healthy
+    environment:
+      # Seals stored credentials. Losing it means every stored Setup URI and
+      # zone token becomes unreadable and vaults have to be reissued.
+      COUCHHUB_SECRET: ${COUCHHUB_SECRET:?set COUCHHUB_SECRET in .env}
+      COUCHHUB_POLL_INTERVAL: ${COUCHHUB_POLL_INTERVAL:-5m}
+      # Vault document browser; see .env.example.
+      COUCHHUB_DOCUMENTS: ${COUCHHUB_DOCUMENTS:-true}
+    volumes:
+      - couchhub-data:/data
+    expose:
+      - "10020"
+    # Uncomment to reach the panel directly, bypassing the proxy.
+    # ports:
+    #   - "10020:10020"
+
+  caddy:
+    image: docker.io/library/caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - couchdb
+      - couchhub
+    environment:
+      SYNC_DOMAIN: ${SYNC_DOMAIN:?set SYNC_DOMAIN in .env}
+      HUB_DOMAIN: ${HUB_DOMAIN:?set HUB_DOMAIN in .env}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+
+volumes:
+  couchdb-data:
+  couchdb-etc:
+  couchhub-data:
+  caddy-data:
+  caddy-config:

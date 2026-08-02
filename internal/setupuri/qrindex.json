@@ -1,0 +1,653 @@
+{
+  "maxIndex": 160,
+  "order": [
+    {
+      "key": "remoteType",
+      "index": 0
+    },
+    {
+      "key": "useCustomRequestHandler",
+      "index": 1
+    },
+    {
+      "key": "couchDB_URI",
+      "index": 2
+    },
+    {
+      "key": "couchDB_USER",
+      "index": 3
+    },
+    {
+      "key": "couchDB_PASSWORD",
+      "index": 4
+    },
+    {
+      "key": "couchDB_DBNAME",
+      "index": 5
+    },
+    {
+      "key": "minimumChunkSize",
+      "index": 6
+    },
+    {
+      "key": "longLineThreshold",
+      "index": 7
+    },
+    {
+      "key": "encrypt",
+      "index": 8
+    },
+    {
+      "key": "passphrase",
+      "index": 9
+    },
+    {
+      "key": "usePathObfuscation",
+      "index": 10
+    },
+    {
+      "key": "checkIntegrityOnSave",
+      "index": 11
+    },
+    {
+      "key": "batch_size",
+      "index": 12
+    },
+    {
+      "key": "batches_limit",
+      "index": 13
+    },
+    {
+      "key": "useHistory",
+      "index": 14
+    },
+    {
+      "key": "disableRequestURI",
+      "index": 15
+    },
+    {
+      "key": "checkConflictOnlyOnOpen",
+      "index": 16
+    },
+    {
+      "key": "showMergeDialogOnlyOnActive",
+      "index": 17
+    },
+    {
+      "key": "additionalSuffixOfDatabaseName",
+      "index": 18
+    },
+    {
+      "key": "ignoreVersionCheck",
+      "index": 19
+    },
+    {
+      "key": "deleteMetadataOfDeletedFiles",
+      "index": 20
+    },
+    {
+      "key": "customChunkSize",
+      "index": 21
+    },
+    {
+      "key": "readChunksOnline",
+      "index": 22
+    },
+    {
+      "key": "automaticallyDeleteMetadataOfDeletedFiles",
+      "index": 23
+    },
+    {
+      "key": "useDynamicIterationCount",
+      "index": 24
+    },
+    {
+      "key": "permitEmptyPassphrase",
+      "index": 25
+    },
+    {
+      "key": "useTimeouts",
+      "index": 26
+    },
+    {
+      "key": "doNotPaceReplication",
+      "index": 27
+    },
+    {
+      "key": "hashCacheMaxCount",
+      "index": 28
+    },
+    {
+      "key": "hashCacheMaxAmount",
+      "index": 29
+    },
+    {
+      "key": "concurrencyOfReadChunksOnline",
+      "index": 30
+    },
+    {
+      "key": "minimumIntervalOfReadChunksOnline",
+      "index": 31
+    },
+    {
+      "key": "hashAlg",
+      "index": 32
+    },
+    {
+      "key": "enableCompression",
+      "index": 33
+    },
+    {
+      "key": "accessKey",
+      "index": 34
+    },
+    {
+      "key": "bucket",
+      "index": 35
+    },
+    {
+      "key": "endpoint",
+      "index": 36
+    },
+    {
+      "key": "region",
+      "index": 37
+    },
+    {
+      "key": "secretKey",
+      "index": 38
+    },
+    {
+      "key": "useEden",
+      "index": 39
+    },
+    {
+      "key": "maxChunksInEden",
+      "index": 40
+    },
+    {
+      "key": "maxTotalLengthInEden",
+      "index": 41
+    },
+    {
+      "key": "maxAgeInEden",
+      "index": 42
+    },
+    {
+      "key": "disableCheckingConfigMismatch",
+      "index": 43
+    },
+    {
+      "key": "handleFilenameCaseSensitive",
+      "index": 44
+    },
+    {
+      "key": "doNotUseFixedRevisionForChunks",
+      "index": 45
+    },
+    {
+      "key": "sendChunksBulk",
+      "index": 46
+    },
+    {
+      "key": "sendChunksBulkMaxSize",
+      "index": 47
+    },
+    {
+      "key": "useSegmenter",
+      "index": 48
+    },
+    {
+      "key": "liveSync",
+      "index": 49
+    },
+    {
+      "key": "syncOnSave",
+      "index": 50
+    },
+    {
+      "key": "syncOnStart",
+      "index": 51
+    },
+    {
+      "key": "syncOnFileOpen",
+      "index": 52
+    },
+    {
+      "key": "syncOnEditorSave",
+      "index": 53
+    },
+    {
+      "key": "syncMinimumInterval",
+      "index": 54
+    },
+    {
+      "key": "showVerboseLog",
+      "index": 55
+    },
+    {
+      "key": "lessInformationInLog",
+      "index": 56
+    },
+    {
+      "key": "showLongerLogInsideEditor",
+      "index": 57
+    },
+    {
+      "key": "showStatusOnEditor",
+      "index": 58
+    },
+    {
+      "key": "showStatusOnStatusbar",
+      "index": 59
+    },
+    {
+      "key": "showOnlyIconsOnEditor",
+      "index": 60
+    },
+    {
+      "key": "displayLanguage",
+      "index": 61
+    },
+    {
+      "key": "trashInsteadDelete",
+      "index": 62
+    },
+    {
+      "key": "doNotDeleteFolder",
+      "index": 63
+    },
+    {
+      "key": "batchSave",
+      "index": 64
+    },
+    {
+      "key": "batchSaveMinimumDelay",
+      "index": 64
+    },
+    {
+      "key": "batchSaveMaximumDelay",
+      "index": 65
+    },
+    {
+      "key": "syncMaxSizeInMB",
+      "index": 66
+    },
+    {
+      "key": "useIgnoreFiles",
+      "index": 67
+    },
+    {
+      "key": "ignoreFiles",
+      "index": 68
+    },
+    {
+      "key": "syncOnlyRegEx",
+      "index": 69
+    },
+    {
+      "key": "syncIgnoreRegEx",
+      "index": 70
+    },
+    {
+      "key": "syncAfterMerge",
+      "index": 71
+    },
+    {
+      "key": "resolveConflictsByNewerFile",
+      "index": 72
+    },
+    {
+      "key": "writeDocumentsIfConflicted",
+      "index": 73
+    },
+    {
+      "key": "disableMarkdownAutoMerge",
+      "index": 74
+    },
+    {
+      "key": "configPassphraseStore",
+      "index": 75
+    },
+    {
+      "key": "encryptedPassphrase",
+      "index": 76
+    },
+    {
+      "key": "encryptedCouchDBConnection",
+      "index": 77
+    },
+    {
+      "key": "periodicReplication",
+      "index": 78
+    },
+    {
+      "key": "periodicReplicationInterval",
+      "index": 79
+    },
+    {
+      "key": "syncInternalFiles",
+      "index": 80
+    },
+    {
+      "key": "syncInternalFilesBeforeReplication",
+      "index": 81
+    },
+    {
+      "key": "syncInternalFilesInterval",
+      "index": 82
+    },
+    {
+      "key": "syncInternalFilesIgnorePatterns",
+      "index": 83
+    },
+    {
+      "key": "watchInternalFileChanges",
+      "index": 84
+    },
+    {
+      "key": "suppressNotifyHiddenFilesChange",
+      "index": 85
+    },
+    {
+      "key": "usePluginSync",
+      "index": 86
+    },
+    {
+      "key": "usePluginSettings",
+      "index": 87
+    },
+    {
+      "key": "showOwnPlugins",
+      "index": 88
+    },
+    {
+      "key": "autoSweepPlugins",
+      "index": 89
+    },
+    {
+      "key": "autoSweepPluginsPeriodic",
+      "index": 90
+    },
+    {
+      "key": "notifyPluginOrSettingUpdated",
+      "index": 91
+    },
+    {
+      "key": "deviceAndVaultName",
+      "index": 92
+    },
+    {
+      "key": "usePluginSyncV2",
+      "index": 93
+    },
+    {
+      "key": "usePluginEtc",
+      "index": 94
+    },
+    {
+      "key": "pluginSyncExtendedSetting",
+      "index": 95
+    },
+    {
+      "key": "useAdvancedMode",
+      "index": 96
+    },
+    {
+      "key": "usePowerUserMode",
+      "index": 97
+    },
+    {
+      "key": "useEdgeCaseMode",
+      "index": 98
+    },
+    {
+      "key": "notifyThresholdOfRemoteStorageSize",
+      "index": 99
+    },
+    {
+      "key": "disableWorkerForGeneratingChunks",
+      "index": 100
+    },
+    {
+      "key": "processSmallFilesInUIThread",
+      "index": 101
+    },
+    {
+      "key": "enableChunkSplitterV2",
+      "index": 102
+    },
+    {
+      "key": "savingDelay",
+      "index": 103
+    },
+    {
+      "key": "gcDelay",
+      "index": 104
+    },
+    {
+      "key": "skipOlderFilesOnSync",
+      "index": 105
+    },
+    {
+      "key": "useIndexedDBAdapter",
+      "index": 106
+    },
+    {
+      "key": "enableDebugTools",
+      "index": 107
+    },
+    {
+      "key": "writeLogToTheFile",
+      "index": 108
+    },
+    {
+      "key": "settingSyncFile",
+      "index": 109
+    },
+    {
+      "key": "writeCredentialsForSettingSync",
+      "index": 110
+    },
+    {
+      "key": "notifyAllSettingSyncFile",
+      "index": 111
+    },
+    {
+      "key": "suspendFileWatching",
+      "index": 112
+    },
+    {
+      "key": "suspendParseReplicationResult",
+      "index": 113
+    },
+    {
+      "key": "doNotSuspendOnFetching",
+      "index": 114
+    },
+    {
+      "key": "versionUpFlash",
+      "index": 115
+    },
+    {
+      "key": "settingVersion",
+      "index": 116
+    },
+    {
+      "key": "isConfigured",
+      "index": 117
+    },
+    {
+      "key": "lastReadUpdates",
+      "index": 118
+    },
+    {
+      "key": "doctorProcessedVersion",
+      "index": 119
+    },
+    {
+      "key": "P2P_Enabled",
+      "index": 120
+    },
+    {
+      "key": "P2P_relays",
+      "index": 121
+    },
+    {
+      "key": "P2P_roomID",
+      "index": 122
+    },
+    {
+      "key": "P2P_passphrase",
+      "index": 123
+    },
+    {
+      "key": "P2P_AutoAccepting",
+      "index": 124
+    },
+    {
+      "key": "P2P_AutoStart",
+      "index": 125
+    },
+    {
+      "key": "P2P_AutoBroadcast",
+      "index": 126
+    },
+    {
+      "key": "P2P_AutoSyncPeers",
+      "index": 127
+    },
+    {
+      "key": "P2P_AutoWatchPeers",
+      "index": 128
+    },
+    {
+      "key": "P2P_SyncOnReplication",
+      "index": 129
+    },
+    {
+      "key": "P2P_AppID",
+      "index": 130
+    },
+    {
+      "key": "P2P_RebuildFrom",
+      "index": 131
+    },
+    {
+      "key": "bucketCustomHeaders",
+      "index": 132
+    },
+    {
+      "key": "couchDB_CustomHeaders",
+      "index": 133
+    },
+    {
+      "key": "useJWT",
+      "index": 134
+    },
+    {
+      "key": "jwtAlgorithm",
+      "index": 135
+    },
+    {
+      "key": "jwtKey",
+      "index": 136
+    },
+    {
+      "key": "jwtKid",
+      "index": 137
+    },
+    {
+      "key": "jwtSub",
+      "index": 138
+    },
+    {
+      "key": "jwtExpDuration",
+      "index": 139
+    },
+    {
+      "key": "P2P_AutoAcceptingPeers",
+      "index": 140
+    },
+    {
+      "key": "P2P_AutoDenyingPeers",
+      "index": 141
+    },
+    {
+      "key": "syncInternalFilesTargetPatterns",
+      "index": 142
+    },
+    {
+      "key": "useRequestAPI",
+      "index": 143
+    },
+    {
+      "key": "hideFileWarningNotice",
+      "index": 144
+    },
+    {
+      "key": "bucketPrefix",
+      "index": 145
+    },
+    {
+      "key": "chunkSplitterVersion",
+      "index": 146
+    },
+    {
+      "key": "E2EEAlgorithm",
+      "index": 147
+    },
+    {
+      "key": "processSizeMismatchedFiles",
+      "index": 148
+    },
+    {
+      "key": "forcePathStyle",
+      "index": 149
+    },
+    {
+      "key": "P2P_turnServers",
+      "index": 150
+    },
+    {
+      "key": "P2P_turnUsername",
+      "index": 151
+    },
+    {
+      "key": "P2P_turnCredential",
+      "index": 152
+    },
+    {
+      "key": "syncInternalFileOverwritePatterns",
+      "index": 153
+    },
+    {
+      "key": "useOnlyLocalChunk",
+      "index": 154
+    },
+    {
+      "key": "maxMTimeForReflectEvents",
+      "index": 155
+    },
+    {
+      "key": "networkWarningStyle",
+      "index": 156
+    },
+    {
+      "key": "remoteConfigurations",
+      "index": 157
+    },
+    {
+      "key": "activeConfigurationId",
+      "index": 158
+    },
+    {
+      "key": "P2P_ActiveRemoteConfigurationId",
+      "index": 159
+    },
+    {
+      "key": "autoAcceptCompatibleTweak",
+      "index": 160
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+# Hot reload for the Go API during `make dev-server`.
+#
+# Without this the API is a long-running `go run`, so backend changes only take
+# effect on a manual restart - and a hot-reloaded UI calling an endpoint the
+# running binary predates fails with a bare 404 that looks like a routing bug.
+#
+# Built from the tools/ module by `make dev-server`, so no global install is
+# needed - and so a dev-only tool never constrains the production build.
+
+root = "."
+# Not ".air" itself: clean_on_exit wipes tmp_dir, and the air binary that
+# `make dev-server` builds lives at .air/air.
+tmp_dir = ".air/tmp"
+
+[build]
+  cmd = "go build -o ./.air/tmp/couchhub ./cmd/couchhub"
+  bin = "./.air/tmp/couchhub"
+  args_bin = ["serve"]
+
+  include_ext = ["go", "json", "md"]
+  # webdist changes on every UI build and would otherwise restart the API for
+  # nothing; in dev the UI is served from Vite anyway.
+  exclude_dir = [".air", ".git", "bin", "data", "node_modules", "scripts", "web", "internal/httpapi/webdist"]
+  exclude_regex = ["_test\\.go"]
+
+  # Give a save-storm (formatter, multi-file edit) time to settle.
+  delay = 400
+  stop_on_error = false
+  send_interrupt = true
+  kill_delay = "2s"
+
+[log]
+  main_only = true
+
+[misc]
+  clean_on_exit = true

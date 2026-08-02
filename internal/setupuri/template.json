@@ -1,0 +1,23 @@
+{
+  "couchDB_URI": "@@COUCHHUB_COUCHDB_URI@@",
+  "couchDB_USER": "@@COUCHHUB_COUCHDB_USER@@",
+  "couchDB_PASSWORD": "@@COUCHHUB_COUCHDB_PASSWORD@@",
+  "couchDB_DBNAME": "@@COUCHHUB_COUCHDB_DBNAME@@",
+  "syncOnStart": true,
+  "periodicReplication": true,
+  "syncOnFileOpen": true,
+  "encrypt": true,
+  "passphrase": "@@COUCHHUB_E2EE_PASSPHRASE@@",
+  "usePathObfuscation": true,
+  "batchSave": true,
+  "customChunkSize": 60,
+  "syncAfterMerge": true,
+  "concurrencyOfReadChunksOnline": 30,
+  "minimumIntervalOfReadChunksOnline": 25,
+  "isConfigured": true,
+  "usePluginSyncV2": true,
+  "handleFilenameCaseSensitive": false,
+  "configPassphraseStore": "",
+  "encryptedCouchDBConnection": "",
+  "encryptedPassphrase": ""
+}

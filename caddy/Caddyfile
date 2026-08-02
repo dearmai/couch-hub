@@ -1,0 +1,33 @@
+# CouchDB must be mounted at the root of its own hostname - livesync does not
+# support a subpath - so it gets its own domain, separate from the panel.
+
+{$SYNC_DOMAIN} {
+	reverse_proxy couchdb:5984 {
+		# Equivalent to nginx's `proxy_buffering off`. With buffering on, a long
+		# _changes long-poll is held until the buffer fills, which looks exactly
+		# like sync having silently stalled.
+		flush_interval -1
+	}
+
+	# CORS is CouchDB's job here - CouchHub provisions the headers it needs. A
+	# proxy that adds its own would duplicate them, and a duplicated
+	# Access-Control-Allow-Origin fails the browser check outright.
+
+	log {
+		output stderr
+		format console
+	}
+}
+
+{$HUB_DOMAIN} {
+	reverse_proxy couchhub:10020
+
+	log {
+		output stderr
+		format console
+	}
+}
+
+# Caddy imposes no request-body limit by default, so nothing here corresponds to
+# nginx's client_max_body_size. If you add one, keep it above CouchDB's
+# max_http_request_size (4 GiB) or large attachment syncs will fail.

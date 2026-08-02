@@ -1,0 +1,87 @@
+# Development stack for `make dev-server`.
+#
+# Always start it through the Makefile. process-compose auto-discovers its
+# config, and `compose.yaml` - the Docker Compose file next to this one - is one
+# of the names it accepts, so a bare `process-compose up` loads that instead and
+# starts nothing. The Makefile passes --config explicitly.
+#
+#   couchdb  a throwaway CouchDB in a container, wiped with `make dev-reset`
+#   web      Vite dev server with hot reload, on 10021
+#   api      the Go server on 10020, proxying UI requests to Vite
+#
+# The browser only ever talks to 10020, so the dev origin matches production and
+# nothing has to change when the UI is embedded instead of proxied.
+#
+# Ports in development:
+#   10020  CouchHub API + UI
+#   10021  Vite dev server (proxied through 10020)
+#   10029  process-compose's own API - set via PC_PORT_NUM in the Makefile,
+#          because its default 8080 collides with almost everything
+#   15984  throwaway CouchDB
+version: "0.5"
+
+environment:
+  - "COUCHHUB_DEV_COUCHDB_USER=admin"
+  - "COUCHHUB_DEV_COUCHDB_PASSWORD=couchhub-dev"
+
+processes:
+  couchdb:
+    # CONTAINER_ENGINE=podman to use podman instead.
+    command: |
+      ${CONTAINER_ENGINE:-docker} run --rm --name couchhub-dev-couchdb \
+        -p 15984:5984 \
+        -e COUCHDB_USER=$COUCHHUB_DEV_COUCHDB_USER \
+        -e COUCHDB_PASSWORD=$COUCHHUB_DEV_COUCHDB_PASSWORD \
+        -v couchhub-dev-couchdb-data:/opt/couchdb/data \
+        -v couchhub-dev-couchdb-etc:/opt/couchdb/etc/local.d \
+        docker.io/library/couchdb:3.5
+    shutdown:
+      command: "${CONTAINER_ENGINE:-docker} stop couchhub-dev-couchdb"
+      signal: 15
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        port: 15984
+        path: /_up
+      initial_delay_seconds: 3
+      period_seconds: 2
+      failure_threshold: 30
+    availability:
+      restart: on_failure
+      max_restarts: 3
+
+  web:
+    command: "npm run dev"
+    working_dir: "web"
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        port: 10021
+        path: /
+      initial_delay_seconds: 2
+      period_seconds: 2
+      failure_threshold: 30
+    availability:
+      restart: on_failure
+
+  api:
+    # air rebuilds and restarts on Go changes, so the API never lags behind the
+    # hot-reloading UI. Built by `make dev-server` from tools/; config in
+    # .air.toml.
+    command: "./.air/air"
+    environment:
+      - "COUCHHUB_ADDR=:10020"
+      - "COUCHHUB_DATA_DIR=./data"
+      # Serve the UI from Vite rather than the embedded build, so the React app
+      # hot-reloads without rebuilding the Go binary.
+      - "COUCHHUB_DEV_PROXY=http://127.0.0.1:10021"
+      # Development-only sealing key. Production must set a real one.
+      - "COUCHHUB_SECRET=dev-only-not-a-real-secret"
+      - "COUCHHUB_POLL_INTERVAL=30s"
+    depends_on:
+      couchdb:
+        condition: process_healthy
+      web:
+        condition: process_healthy
+    availability:
+      restart: on_failure

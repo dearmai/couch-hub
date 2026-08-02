@@ -1,0 +1,34 @@
+# build output
+/bin/
+/dist/
+# The embedded UI is a build artifact. Only .gitkeep is committed, so
+# `go build` works on a fresh clone (//go:embed needs the directory to exist)
+# while the built files stay out of the repository.
+/internal/httpapi/webdist/*
+!/internal/httpapi/webdist/.gitkeep
+
+# runtime data - the dev-server store lives here; do not delete while it runs
+/data/
+*.db
+
+# air hot-reload scratch
+/.air/
+
+# node
+node_modules/
+web/dist/
+web/node_modules/
+
+# playwright
+web/.e2e-data/
+web/test-results/
+web/playwright-report/
+
+# local env
+.env
+.env.local
+
+# editors / OS
+.DS_Store
+.idea/
+.vscode/
