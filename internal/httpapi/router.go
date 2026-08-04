@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/dearmai/couch-hub/internal/config"
+	"github.com/dearmai/couch-hub/internal/export"
 	"github.com/dearmai/couch-hub/internal/metrics"
 	"github.com/dearmai/couch-hub/internal/secret"
 	"github.com/dearmai/couch-hub/internal/store"
@@ -18,14 +19,15 @@ import (
 
 // Server holds the dependencies shared by every handler.
 type Server struct {
-	cfg    config.Config
-	store  *store.Store
-	sealer secret.Sealer
-	poller *metrics.Poller
+	cfg     config.Config
+	store   *store.Store
+	sealer  secret.Sealer
+	poller  *metrics.Poller
+	exports *export.Manager
 }
 
-func NewServer(cfg config.Config, st *store.Store, sealer secret.Sealer, poller *metrics.Poller) *Server {
-	return &Server{cfg: cfg, store: st, sealer: sealer, poller: poller}
+func NewServer(cfg config.Config, st *store.Store, sealer secret.Sealer, poller *metrics.Poller, exports *export.Manager) *Server {
+	return &Server{cfg: cfg, store: st, sealer: sealer, poller: poller, exports: exports}
 }
 
 // Handler builds the router.
@@ -95,6 +97,17 @@ func (s *Server) Handler() (http.Handler, error) {
 			// The document id is a query parameter, not a path segment: livesync
 			// keys notes by their vault path, so ids contain slashes.
 			r.Get("/{id}/document", s.handleGetDocument)
+			// Packing a vault into a zip. It runs in the background for the
+			// same reason a migration does - it is far too slow for one
+			// request - so starting it, watching it and fetching the result
+			// are three calls.
+			r.Post("/{id}/export", s.handleStartExport)
+			r.Get("/{id}/export", s.handleExportStatus)
+			// The Timeout middleware above only cancels the request context,
+			// which ServeContent does not watch, so a download longer than a
+			// minute still completes.
+			r.Get("/{id}/export/download", s.handleDownloadExport)
+			r.Delete("/{id}/export", s.handleDiscardExport)
 		})
 
 		r.Route("/setup", func(r chi.Router) {

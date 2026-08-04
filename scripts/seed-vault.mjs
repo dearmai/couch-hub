@@ -4,11 +4,23 @@
 //
 //   node scripts/seed-vault.mjs '{"couchdb":"...","db":"...","user":"...","password":"...","passphrase":"...","notes":[{"path":"a.md","text":"# hi"}]}'
 //
+// A note carrying `binaryBase64` instead of `text` is seeded as the plugin
+// stores a binary file, using the plugin's own splitter.
+//
 // Writes one entry per note plus one chunk per note, matching the shape the
 // plugin writes: an entry lists chunk ids, and both its path and every chunk are
 // ciphertext when a passphrase is given.
 
 import { encrypt as encryptHKDF, encryptWithEphemeralSalt, createPBKDF2Salt } from "octagonal-wheels/encryption/hkdf"
+
+// The plugin's own splitter, reached by path because the package does not
+// export it. Seeding binary files by hand would only prove this script agrees
+// with itself, and the thing worth checking is exactly where it puts the chunk
+// boundaries: it slices the *bytes* and base64-encodes each slice separately,
+// so a chunk is a complete base64 document rather than a fragment of one.
+const { splitPieces2V2 } = await import(
+    new URL("../scripts/node_modules/@vrtmrz/livesync-commonlib/dist/string_and_binary/chunks.js", import.meta.url).href
+)
 
 const input = JSON.parse(process.argv[2] ?? "{}")
 const {
@@ -76,15 +88,38 @@ if (passphrase && encryptedMeta) {
     })
 }
 
+/**
+ * Splits a binary note the way the plugin does, through its own splitter.
+ *
+ * binaryBase64 is the whole file; pieceSize is small on purpose, so a modest
+ * test file still spans several chunks.
+ */
+async function binaryParts(note) {
+    const bytes = Buffer.from(note.binaryBase64, "base64")
+    const blob = new Blob([bytes], { type: "application/octet-stream" })
+    const gen = await splitPieces2V2(blob, note.pieceSize ?? 1024, false, 20, note.path, false)
+
+    const parts = []
+    for await (const piece of gen()) parts.push(piece)
+    return { parts, size: bytes.length }
+}
+
 let seeded = 0
 for (const note of notes) {
     const base = idFor(note.path)
     // Chunk ids in livesync are content-addressed with an "h:" prefix. The exact
     // hash does not matter here - only that the entry points at them.
     const chunkIds = []
+
+    const binary = "binaryBase64" in note
     // Split into two chunks for at least one note, so reassembly order is
     // actually exercised rather than assumed.
-    const parts = note.text.length > 40 ? [note.text.slice(0, 20), note.text.slice(20)] : [note.text]
+    const { parts, size } = binary
+        ? await binaryParts(note)
+        : {
+              parts: note.text.length > 40 ? [note.text.slice(0, 20), note.text.slice(20)] : [note.text],
+              size: note.text.length,
+          }
 
     for (const [j, part] of parts.entries()) {
         const id = `h:${base}-${j}`
@@ -107,13 +142,14 @@ for (const note of notes) {
             path: note.path,
             mtime,
             ctime: mtime,
-            size: note.text.length,
+            size,
             children: chunkIds,
         })
         await put(`/${db}/${encodeURIComponent(docId)}`, {
             _id: docId,
             path: ENCRYPTED_META_PREFIX + (await encryptHKDF(meta, passphrase, pbkdf2Salt)),
-            type: "plain",
+            type: binary ? "newnote" : "plain",
+            datatype: binary ? "newnote" : "plain",
             children: [],
             mtime: 0,
             ctime: 0,
@@ -123,11 +159,12 @@ for (const note of notes) {
         await put(`/${db}/${encodeURIComponent(docId)}`, {
             _id: docId,
             path: await maybeEncrypt(note.path),
-            type: "plain",
+            type: binary ? "newnote" : "plain",
+            datatype: binary ? "newnote" : "plain",
             children: chunkIds,
             mtime,
             ctime: mtime,
-            size: note.text.length,
+            size,
         })
     }
     seeded++

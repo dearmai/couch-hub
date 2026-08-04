@@ -8,10 +8,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/dearmai/couch-hub/internal/config"
+	"github.com/dearmai/couch-hub/internal/export"
 	"github.com/dearmai/couch-hub/internal/httpapi"
 	"github.com/dearmai/couch-hub/internal/metrics"
 	"github.com/dearmai/couch-hub/internal/secret"
@@ -45,7 +47,16 @@ func runServe(args []string) error {
 	poller := metrics.NewPoller(st, sealer, cfg.PollInterval)
 	go poller.Run(ctx)
 
-	api := httpapi.NewServer(cfg, st, sealer, poller)
+	// Under the data directory rather than the system temp: an export is a copy
+	// of the whole vault, and a container's /tmp is routinely a tmpfs sized for
+	// nothing of the sort.
+	exports, err := export.NewManager(filepath.Join(cfg.DataDir, "exports"))
+	if err != nil {
+		return err
+	}
+	go exports.Run(ctx)
+
+	api := httpapi.NewServer(cfg, st, sealer, poller, exports)
 	handler, err := api.Handler()
 	if err != nil {
 		return err

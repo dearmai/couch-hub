@@ -436,5 +436,9 @@ func (s *Server) handleDeleteVault(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
+	// A staged export is the vault's contents in the clear. Removing the vault
+	// and leaving that on disk would be the one thing a deletion must not do.
+	s.exports.Discard(v.ID)
+
 	w.WriteHeader(http.StatusNoContent)
 }

@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 
 import { ClientSetupPanel } from "@/components/ClientSetupPanel"
+import { ExportVaultCard } from "@/components/ExportVaultCard"
 import { ProfileSelect } from "@/components/ProfileSelect"
 import { MigrateVaultCard } from "@/components/MigrateVaultCard"
 import { PageHeader } from "@/components/PageHeader"
@@ -285,6 +286,8 @@ export default function VaultDetail() {
           </Card>
 
           <MigrateVaultCard vault={vault} />
+
+          <ExportVaultCard vault={vault} enabled={documentsEnabled} />
 
           <Card>
             <CardHeader>

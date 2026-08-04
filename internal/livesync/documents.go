@@ -47,6 +47,10 @@ type Content struct {
 	Text string `json:"text"`
 	// Binary marks content that is not text and therefore not rendered.
 	Binary bool `json:"binary"`
+
+	// pieces are the decrypted chunks, in order, kept unjoined for a binary
+	// file because each one is separately base64-encoded. See Bytes.
+	pieces []string
 }
 
 // Reader reads one vault's documents.
@@ -176,54 +180,7 @@ func (r *Reader) Get(ctx context.Context, docID string) (Content, error) {
 	}
 
 	doc, children := r.resolve(docID, e)
-	out := Content{Document: doc, Binary: e.Type == TypeNoteBinary}
-
-	// A legacy entry carries its content inline rather than in chunks.
-	if len(children) == 0 {
-		text, err := inlineData(e.Data)
-		if err != nil {
-			return out, err
-		}
-		decrypted, err := r.decrypt(text)
-		if err != nil {
-			return out, err
-		}
-		out.Text = decrypted
-		return out, nil
-	}
-
-	chunks, err := r.client.BulkDocs(ctx, r.dbName, children)
-	if err != nil {
-		return out, err
-	}
-
-	// _all_docs?keys= preserves the requested order, but be explicit: chunk order
-	// is the file, and a reordering would silently scramble the note.
-	byID := make(map[string]string, len(chunks))
-	for _, row := range chunks {
-		var leaf struct {
-			Data string `json:"data"`
-		}
-		if err := json.Unmarshal(row.Doc, &leaf); err != nil {
-			continue
-		}
-		byID[row.ID] = leaf.Data
-	}
-
-	var b strings.Builder
-	for i, id := range children {
-		data, ok := byID[id]
-		if !ok {
-			return out, fmt.Errorf("livesync: 청크 %d/%d (%s)를 찾을 수 없습니다", i+1, len(children), id)
-		}
-		decrypted, err := r.decrypt(data)
-		if err != nil {
-			return out, fmt.Errorf("livesync: 청크 %d/%d 복호화 실패: %w", i+1, len(children), err)
-		}
-		b.WriteString(decrypted)
-	}
-	out.Text = b.String()
-	return out, nil
+	return r.Fetch(ctx, Entry{Document: doc, Children: children, Data: e.Data, Binary: isBinary(e)})
 }
 
 // decrypt passes plaintext through untouched: a vault with encryption off
@@ -284,25 +241,29 @@ func (r *Reader) resolve(id string, e rawEntry) (Document, []string) {
 	return doc, children
 }
 
-// inlineData normalises the legacy `data` field, which is a string in some
+// inlinePieces normalises the legacy `data` field, which is a string in some
 // versions and an array of strings in others.
-func inlineData(v any) (string, error) {
+//
+// The array is returned as it is rather than joined: for a binary entry each
+// element is its own base64 document, so joining is only correct once the
+// caller knows the content is text.
+func inlinePieces(v any) ([]string, error) {
 	switch t := v.(type) {
 	case nil:
-		return "", nil
+		return nil, nil
 	case string:
-		return t, nil
+		return []string{t}, nil
 	case []any:
-		var b strings.Builder
+		out := make([]string, 0, len(t))
 		for _, part := range t {
 			s, ok := part.(string)
 			if !ok {
-				return "", fmt.Errorf("livesync: unexpected data element %T", part)
+				return nil, fmt.Errorf("livesync: unexpected data element %T", part)
 			}
-			b.WriteString(s)
+			out = append(out, s)
 		}
-		return b.String(), nil
+		return out, nil
 	default:
-		return "", fmt.Errorf("livesync: unexpected data field %T", v)
+		return nil, fmt.Errorf("livesync: unexpected data field %T", v)
 	}
 }
