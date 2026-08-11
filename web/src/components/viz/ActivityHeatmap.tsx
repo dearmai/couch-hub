@@ -92,9 +92,11 @@ function buildCalendar(activity: ActivityDay[]) {
 
   const today = new Date()
   const end = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()))
-  // Walk back to the Sunday that starts the first visible week.
-  const start = new Date(end.getTime() - (WEEKS * 7 - 1) * DAY_MS)
-  start.setUTCDate(start.getUTCDate() - start.getUTCDay())
+  // Anchor on the Sunday of the current week and step back WEEKS - 1 whole
+  // weeks. Walking back a raw 371 days and *then* snapping to Sunday would drag
+  // the whole window up to six days earlier, dropping the most recent days -
+  // the ones anyone looking at this grid actually cares about - off the end.
+  const start = new Date(end.getTime() - (end.getUTCDay() + (WEEKS - 1) * 7) * DAY_MS)
 
   const cells: (Cell | null)[][] = []
   let max = 0
